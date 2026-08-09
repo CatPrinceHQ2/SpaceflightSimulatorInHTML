@@ -7,7 +7,7 @@ Spaceflight Simulator in HTML. Thats literally what this is. It's ~3600 lines of
 
 No building or dependencies. Just open the HTML in Google or whatever.
 
-**~3,600 lines of vanilla HTML/CSS/JS in one file.** Canvas 2D rendering, a hand-rolled orbital mechanics engine, and a procedural bytebeat music system, all self-contained without need for internet. This allows bypassing of work or schooling internet blocks by creating a website in the browser with no actual website. It is all stored locally. And it's very compact, less than one megabyte.
+**~3,800 lines of vanilla HTML/CSS/JS in one file.** Canvas 2D rendering, a hand-rolled orbital mechanics engine, and a procedural bytebeat music system, all self-contained without need for internet. This allows bypassing of work or schooling internet blocks by creating a website in the browser with no actual website. It is all stored locally. And it's very compact, less than one megabyte.
 
 ## What it does
 
