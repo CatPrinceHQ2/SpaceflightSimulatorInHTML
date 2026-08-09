@@ -1,7 +1,7 @@
 # SpaceflightSimulatorInHTML
 Spaceflight Simulator in HTML. Thats literally what this is. It's ~3600 lines of code. The code is ~50% AI generated. I wrote lots of the code originally, but had Claude polish it. It's also in beta because it's sort of missing a ton of features.
 
-# Spaceflight Sim — Build & Launch
+# It's spaceflight sim cuh
 
 No building or dependencies. Just open the HTML in Google or whatever.
 
