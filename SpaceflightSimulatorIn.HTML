@@ -485,20 +485,74 @@ const LAUNCH_PAD_HEIGHT = 8;
 
 // ============================================================
 // SOLAR SYSTEM — gameplay-scaled radii/distances/gravity, not a
-// uniform real-world multiple (see comments above)
+// uniform real-world multiple (see comments above).
+// Bodies by key function should be like somewhat generic for parented stuff
 // ============================================================
 const PLANET_DEFS = [
-  {key:'mercury',name:'Mercury',color:'#9c8d7b',groundColor:'#8a7d6d',radius:32000, surfG:3.7, distAU:0.387, periodDays:88,     solid:true, atmo:false, eccMod:0.794},
-  {key:'venus',  name:'Venus',  color:'#d9b96a',groundColor:'#caa050',radius:90000, surfG:8.9, distAU:0.723, periodDays:225,    solid:true, atmo:true,  atmoFrac:0.5, atmoColor:'#c9a84c', eccMod:0.993},
-  {key:'earth',  name:'Earth',  color:'#3f7fdb',groundColor:'#46a256',radius:150000,surfG:11,  distAU:1.0,   periodDays:365.25, solid:true, atmo:true,  atmoFrac:0.3, atmoColor:'#5599dd', eccMod:0.983},
-  {key:'mars',   name:'Mars',   color:'#c1440e',groundColor:'#9c3d17',radius:82000, surfG:6.0, distAU:1.524, periodDays:687,    solid:true, atmo:true,  atmoFrac:0.15,atmoColor:'#8B4010', eccMod:0.907},
-  {key:'jupiter',name:'Jupiter',color:'#d8ac6d',groundColor:null,     radius:950000,surfG:48,  distAU:5.203, periodDays:4333,   solid:false,atmo:true,  atmoColor:'#c49050', eccMod:0.951},
-  {key:'saturn', name:'Saturn', color:'#e3c887',groundColor:null,     radius:800000,surfG:32,  distAU:9.537, periodDays:10759,  solid:false,atmo:true,  atmoColor:'#d4b85a', eccMod:0.943},
-  {key:'uranus', name:'Uranus', color:'#a7dede',groundColor:null,     radius:440000,surfG:19,  distAU:19.191,periodDays:30687,  solid:false,atmo:true,  atmoColor:'#70c8c8', eccMod:0.954},
-  {key:'neptune',name:'Neptune',color:'#4f6bf6',groundColor:null,     radius:420000,surfG:21,  distAU:30.07, periodDays:60190,  solid:false,atmo:true,  atmoColor:'#3355cc', eccMod:0.990},
-  {key:'pluto',  name:'Pluto',  color:'#c9b8a8',groundColor:'#cfcfcf',radius:18000, surfG:1.3, distAU:39.48, periodDays:90560,  solid:true, atmo:false, eccMod:0.751},
+  {key:'mercury',name:'Mercury',parent:'sun',color:'#9c8d7b',groundColor:'#8a7d6d',radius:32000, surfG:3.7, distAU:0.387, periodDays:88,     solid:true, atmo:false, eccMod:0.794},
+  {key:'venus',  name:'Venus',  parent:'sun',color:'#d9b96a',groundColor:'#caa050',radius:90000, surfG:8.9, distAU:0.723, periodDays:225,    solid:true, atmo:true,  atmoFrac:0.5, atmoColor:'#c9a84c', eccMod:0.993},
+  {key:'earth',  name:'Earth',  parent:'sun',color:'#3f7fdb',groundColor:'#46a256',radius:150000,surfG:11,  distAU:1.0,   periodDays:365.25, solid:true, atmo:true,  atmoFrac:0.3, atmoColor:'#5599dd', eccMod:0.983},
+  {key:'mars',   name:'Mars',   parent:'sun',color:'#c1440e',groundColor:'#9c3d17',radius:82000, surfG:6.0, distAU:1.524, periodDays:687,    solid:true, atmo:true,  atmoFrac:0.15,atmoColor:'#8B4010', eccMod:0.907},
+  {key:'jupiter',name:'Jupiter',parent:'sun',color:'#d8ac6d',groundColor:null,     radius:950000,surfG:48,  distAU:5.203, periodDays:4333,   solid:false,atmo:true,  atmoColor:'#c49050', eccMod:0.951},
+  {key:'saturn', name:'Saturn', parent:'sun',color:'#e3c887',groundColor:null,     radius:800000,surfG:32,  distAU:9.537, periodDays:10759,  solid:false,atmo:true,  atmoColor:'#d4b85a', eccMod:0.943},
+  {key:'uranus', name:'Uranus', parent:'sun',color:'#a7dede',groundColor:null,     radius:440000,surfG:19,  distAU:19.191,periodDays:30687,  solid:false,atmo:true,  atmoColor:'#70c8c8', eccMod:0.954},
+  {key:'neptune',name:'Neptune',parent:'sun',color:'#4f6bf6',groundColor:null,     radius:420000,surfG:21,  distAU:30.07, periodDays:60190,  solid:false,atmo:true,  atmoColor:'#3355cc', eccMod:0.990},
+  {key:'pluto',  name:'Pluto',  parent:'sun',color:'#c9b8a8',groundColor:'#cfcfcf',radius:18000, surfG:1.3, distAU:39.48, periodDays:90560,  solid:true, atmo:false, eccMod:0.751},
 ];
-const PLANETS = PLANET_DEFS.map((p,i)=>{
+
+// Moons are calculated based on the home planet multiplicatively. I dont know why I did it this specific way. Claude could've doneit better probably. Its all not standard but makes sense to me. Sorry modders.
+let moonAngleSeed=0;
+const MOON_DEFS = [
+  {key:'moon',    name:'The Moon',parent:'earth',  color:'#bdbdbd',groundColor:'#9a9a9a',radiusMod:0.27240,distMod:60.3,  surfG:1.62,  eccMod:0.94510,solid:true,atmo:false},
+
+  {key:'phobos',  name:'Phobos',  parent:'mars',   color:'#8a7a6a',groundColor:'#6d5f52',radiusMod:0.00332,distMod:2.77,  surfG:0.0057,eccMod:0.98490,solid:true,atmo:false},
+  {key:'deimos',  name:'Deimos',  parent:'mars',   color:'#9a8a7a',groundColor:'#7d6f62',radiusMod:0.00183,distMod:6.92,  surfG:0.003, eccMod:0.99980,solid:true,atmo:false},
+
+  {key:'io',      name:'Io',      parent:'jupiter',color:'#e8d24a',groundColor:'#c9a530',radiusMod:0.02548,distMod:6.03,  surfG:1.80,  eccMod:0.99590,solid:true,atmo:false},
+  {key:'europa',  name:'Europa',  parent:'jupiter',color:'#d8c9a8',groundColor:'#b8a888',radiusMod:0.02183,distMod:9.60,  surfG:1.31,  eccMod:0.99100,solid:true,atmo:false},
+  {key:'ganymede',name:'Ganymede',parent:'jupiter',color:'#8a8478',groundColor:'#6d6858',radiusMod:0.03684,distMod:15.31, surfG:1.43,  eccMod:0.99870,solid:true,atmo:false},
+  {key:'callisto',name:'Callisto',parent:'jupiter',color:'#5c5248',groundColor:'#453d36',radiusMod:0.03371,distMod:26.93, surfG:1.24,  eccMod:0.99260,solid:true,atmo:false},
+
+  {key:'mimas',    name:'Mimas',    parent:'saturn',color:'#cfcfcf',groundColor:'#adadad',radiusMod:0.00329,distMod:3.19, surfG:0.064, eccMod:0.97980,solid:true,atmo:false},
+  {key:'enceladus',name:'Enceladus',parent:'saturn',color:'#f2f2f2',groundColor:'#d8d8d8',radiusMod:0.00418,distMod:4.09, surfG:0.113, eccMod:0.99530,solid:true,atmo:false},
+  {key:'tethys',   name:'Tethys',   parent:'saturn',color:'#d6d6ce',groundColor:'#b8b8b0',radiusMod:0.00881,distMod:5.06, surfG:0.145, eccMod:0.99990,solid:true,atmo:false},
+  {key:'dione',    name:'Dione',    parent:'saturn',color:'#c9c9c1',groundColor:'#aaaaa2',radiusMod:0.00932,distMod:6.48, surfG:0.232, eccMod:0.99780,solid:true,atmo:false},
+  {key:'rhea',     name:'Rhea',     parent:'saturn',color:'#d0d0c8',groundColor:'#b0b0a8',radiusMod:0.01267,distMod:9.05, surfG:0.264, eccMod:0.99900,solid:true,atmo:false},
+  {key:'titan',    name:'Titan',    parent:'saturn',color:'#e0b060',groundColor:'#c09040',radiusMod:0.04272,distMod:20.99,surfG:1.35,  eccMod:0.97120,solid:true,atmo:false},
+  {key:'iapetus',  name:'Iapetus',  parent:'saturn',color:'#a89888',groundColor:'#7a6c60',radiusMod:0.01219,distMod:61.15,surfG:0.223, eccMod:0.97140,solid:true,atmo:false},
+
+  {key:'miranda',name:'Miranda',parent:'uranus',color:'#b8c0c0',groundColor:'#98a0a0',radiusMod:0.00923,distMod:5.10, surfG:0.079,eccMod:0.99870,solid:true,atmo:false},
+  {key:'ariel',  name:'Ariel',  parent:'uranus',color:'#c8d0d0',groundColor:'#a8b0b0',radiusMod:0.02265,distMod:7.53, surfG:0.269,eccMod:0.99880,solid:true,atmo:false},
+  {key:'umbriel',name:'Umbriel',parent:'uranus',color:'#787c7c',groundColor:'#5c6060',radiusMod:0.02288,distMod:10.49,surfG:0.253,eccMod:0.99610,solid:true,atmo:false},
+  {key:'titania',name:'Titania',parent:'uranus',color:'#9098a0',groundColor:'#707880',radiusMod:0.03085,distMod:17.20,surfG:0.379,eccMod:0.99890,solid:true,atmo:false},
+  {key:'oberon', name:'Oberon', parent:'uranus',color:'#888078',groundColor:'#68605a',radiusMod:0.02979,distMod:23.01,surfG:0.347,eccMod:0.99860,solid:true,atmo:false},
+
+  {key:'triton', name:'Triton', parent:'neptune',color:'#e8c8d8',groundColor:'#c8a8b8',radiusMod:0.05465,distMod:14.41, surfG:0.779,eccMod:0.99998,solid:true,atmo:false},
+  {key:'nereid', name:'Nereid', parent:'neptune',color:'#9098a8',groundColor:'#707888',radiusMod:0.00697,distMod:223.9, surfG:0.071,eccMod:0.25100,solid:true,atmo:false},
+
+  {key:'charon',  name:'Charon',  parent:'pluto',color:'#a8a8a8',groundColor:'#888888',radiusMod:0.50997,distMod:16.49,surfG:0.288,eccMod:0.99995,solid:true,atmo:false},
+  {key:'styx',    name:'Styx',    parent:'pluto',color:'#9c9c9c',groundColor:'#7c7c7c',radiusMod:0.00421,distMod:35.9, surfG:0.001,eccMod:0.99420,solid:true,atmo:false},
+  {key:'nix',     name:'Nix',     parent:'pluto',color:'#a4a4a4',groundColor:'#848484',radiusMod:0.02104,distMod:40.99,surfG:0.003,eccMod:0.99800,solid:true,atmo:false},
+  {key:'kerberos',name:'Kerberos',parent:'pluto',color:'#909090',groundColor:'#707070',radiusMod:0.00799,distMod:48.64,surfG:0.003,eccMod:0.99670,solid:true,atmo:false},
+  {key:'hydra',   name:'Hydra',   parent:'pluto',color:'#989898',groundColor:'#787878',radiusMod:0.02314,distMod:54.5, surfG:0.003,eccMod:0.99410,solid:true,atmo:false},
+];
+
+//Sun is root and has no parent. so i made it null. 
+const SUN_BODY = {key:'sun',name:'Sun',parent:null,radius:SUN_RADIUS,GM:GM_SUN,GMbase:GM_SUN,solid:false,atmo:false};
+const BODIES_BY_KEY = {sun:SUN_BODY};
+
+function eccFromMod(mod){
+  return Math.min(0.995,Math.max(0,1-(mod===undefined?1:mod)));
+}
+function solveKepler(M,e){
+  let E=M;
+  for(let i=0;i<8;i++){
+    E-=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));
+  }
+  return E;
+}
+
+const TOP_LEVEL_PLANETS = PLANET_DEFS.map((p,i)=>{
   const distance = p.distAU*AU;
   const GM = p.surfG*p.radius*p.radius*PLANET_GM_MULT;
   // GMbase intentionally excludes PLANET_GM_MULT: SOI is a gameplay size, kept
@@ -510,16 +564,36 @@ const PLANETS = PLANET_DEFS.map((p,i)=>{
   const omega = 2*Math.PI/periodSimSeconds;
   const initialAngle = (i/PLANET_DEFS.length)*Math.PI*2;
   const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*GM_SUN))*SOI_SCALE);
-  const ecc = Math.min(0.995,Math.max(0,1-(p.eccMod===undefined?1:p.eccMod)));
-  return Object.assign({},p,{distance,GM,omega,initialAngle,soi,ecc});
+  const ecc = eccFromMod(p.eccMod);
+  const body = Object.assign({},p,{distance,GM,GMbase,omega,initialAngle,soi,ecc});
+  BODIES_BY_KEY[body.key]=body;
+  return body;
 });
-function solveKepler(M,e){
-  let E=M;
-  for(let i=0;i<8;i++){
-    E-=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));
-  }
-  return E;
-}
+
+//Moon math is anchored to planet like how planets anchor to sun
+const MOONS = MOON_DEFS.map(m=>{
+  const parent=BODIES_BY_KEY[m.parent];
+  const radius = m.radiusMod*parent.radius;
+  const distance = m.distMod*parent.radius;
+  const GMbase = m.surfG*radius*radius;
+  const GM = GMbase*PLANET_GM_MULT;
+  const omega = Math.sqrt(parent.GM/(distance*distance*distance));
+  const initialAngle = (moonAngleSeed++%7)/7*Math.PI*2;
+  const soi = Math.max(radius*3, distance*Math.cbrt(GMbase/(3*parent.GM))*SOI_SCALE);
+  const ecc = eccFromMod(m.eccMod);
+  const body = Object.assign({},m,{radius,distance,GM,GMbase,omega,initialAngle,soi,ecc});
+  BODIES_BY_KEY[body.key]=body;
+  return body;
+});
+
+//i made sun SOI not infinity so i can add Alpha Centauri later.
+SUN_BODY.soi = 3.5*BODIES_BY_KEY['pluto'].distance;
+
+//planets now got moons so update this
+const PLANETS = [...TOP_LEVEL_PLANETS, ...MOONS];
+//everybody includes the sun though.
+const ALL_BODIES = [SUN_BODY, ...PLANETS];
+
 function planetOrbitState(p,t){
   const e=p.ecc;
   const M=p.initialAngle+p.omega*t;
@@ -535,10 +609,66 @@ function planetOrbitState(p,t){
   const dthetadt=Math.sqrt(1-e*e)*p.omega/((1-e*cosE)*(1-e*cosE));
   return {r,theta,drdt,dthetadt};
 }
-function planetPositionAt(p,simTime){
-  const o=planetOrbitState(p,simTime);
-  return {x:o.r*Math.cos(o.theta), y:o.r*Math.sin(o.theta)};
+
+//Basically if theres a binary star (Like Alpha Centauri!!) later on, this will handle it so i dont have to deal with this math later. I'll also not have to worry about it crashing.
+function binaryAnchorPos(defining,t){
+  const anchorKey=defining.barycenterParent||null;
+  return anchorKey?planetPositionAt(BODIES_BY_KEY[anchorKey],t):SUN_POS;
 }
+function binaryAnchorVel(defining,t){
+  const anchorKey=defining.barycenterParent||null;
+  return anchorKey?planetVelocityAt(BODIES_BY_KEY[anchorKey],t):{x:0,y:0};
+}
+function binaryPairPosition(p,partner,t){
+  const defining=p.binaryMirror?partner:p;
+  const o=planetOrbitState(defining,t);
+  const sepX=o.r*Math.cos(o.theta), sepY=o.r*Math.sin(o.theta);
+  const anchor=binaryAnchorPos(defining,t);
+  const totalR=p.radius+partner.radius;
+  const frac=(defining===p)?(partner.radius/totalR):(-p.radius/totalR);
+  return {x:anchor.x+sepX*frac, y:anchor.y+sepY*frac};
+}
+function binaryPairVelocity(p,partner,t){
+  const defining=p.binaryMirror?partner:p;
+  const o=planetOrbitState(defining,t);
+  const cosT=Math.cos(o.theta), sinT=Math.sin(o.theta);
+  const svx=o.drdt*cosT-o.r*o.dthetadt*sinT, svy=o.drdt*sinT+o.r*o.dthetadt*cosT;
+  const anchorV=binaryAnchorVel(defining,t);
+  const totalR=p.radius+partner.radius;
+  const frac=(defining===p)?(partner.radius/totalR):(-p.radius/totalR);
+  return {x:anchorV.x+svx*frac, y:anchorV.y+svy*frac};
+}
+
+function planetPositionAt(p,simTime){
+  if(p.parent===null) return SUN_POS; //Sun doesnt orbit anything and it doesnt have a parent as stated earlier
+  const parent=BODIES_BY_KEY[p.parent];
+  if(parent.parent===p.key) return binaryPairPosition(p,parent,simTime);
+  const parentPos=planetPositionAt(parent,simTime);
+  const o=planetOrbitState(p,simTime);
+  return {x:parentPos.x+o.r*Math.cos(o.theta), y:parentPos.y+o.r*Math.sin(o.theta)};
+}
+function planetVelocityAt(p,t){
+  if(p.parent===null) return {x:0,y:0};
+  const parent=BODIES_BY_KEY[p.parent];
+  if(parent.parent===p.key) return binaryPairVelocity(p,parent,t);
+  const o=planetOrbitState(p,t);
+  const cosT=Math.cos(o.theta), sinT=Math.sin(o.theta);
+  const localV={x:o.drdt*cosT-o.r*o.dthetadt*sinT, y:o.drdt*sinT+o.r*o.dthetadt*cosT};
+  const parentV=planetVelocityAt(parent,t);
+  return {x:parentV.x+localV.x, y:parentV.y+localV.y};
+}
+
+//The smallest soi you are in is the one that effects you and all others get dropped or should get dropped - edit yes this works as intended
+function findDominantBody(pos,t){
+  let best=null;
+  for(const p of ALL_BODIES){
+    const ppos=planetPositionAt(p,t);
+    const d=Math.hypot(pos.x-ppos.x,pos.y-ppos.y);
+    if(d<=p.soi&&(!best||p.soi<best.p.soi)){ best={p,ppos,dist:d}; }
+  }
+  return best;
+}
+
 const EARTH = PLANETS.find(p=>p.key==='earth');
 // Actual simulated surface gravity (GM/r²), equal to surfG*PLANET_GM_MULT.
 // Build-screen TWR must use this, not the raw pre-multiplier EARTH.surfG,
@@ -2020,30 +2150,6 @@ function renderStarLayer(pxW,pxH,dpr){
 // ============================================================
 // PHYSICS
 // ============================================================
-function gravAccel(pos,bodyPos,GM){
-  const dx=bodyPos.x-pos.x, dy=bodyPos.y-pos.y;
-  const r2=dx*dx+dy*dy;
-  const r=Math.sqrt(r2)||1;
-  const a=GM/r2;
-  return {ax:a*dx/r, ay:a*dy/r, dist:r};
-}
-function planetVelocityAt(p,t){
-  const o=planetOrbitState(p,t);
-  const cosT=Math.cos(o.theta), sinT=Math.sin(o.theta);
-  return {
-    x:o.drdt*cosT-o.r*o.dthetadt*sinT,
-    y:o.drdt*sinT+o.r*o.dthetadt*cosT,
-  };
-}
-function findDominantBody(pos,t){
-  let best=null;
-  for(const p of PLANETS){
-    const ppos=planetPositionAt(p,t);
-    const d=Math.hypot(pos.x-ppos.x,pos.y-ppos.y);
-    if(d<=p.soi&&(!best||p.soi<best.p.soi)){ best={p,ppos,dist:d}; }
-  }
-  return best;
-}
 function destroyShip(f,reason){
   f.status='crashed'; f.statusMsg=reason; f.engineOn=false; f._pendingRemoval=true;
   if(f._isBeaconClone) return; // no UI side-effects for prediction clones
@@ -2141,6 +2247,31 @@ function shipDragMult(f){
   return m;
 }
 
+//prevent clipping through solid planets
+function checkTunnelCollisions(f,domBody,tNew){
+  for(const p of PLANETS){
+    if(!p.solid||p===domBody) continue;
+    const ppos=planetPositionAt(p,tNew);
+    const d=Math.hypot(f.pos.x-ppos.x,f.pos.y-ppos.y);
+    const foot=shipFootOffset(f);
+    const groundR=p.radius+foot;
+    if(d<=groundR){
+      const nx=(f.pos.x-ppos.x)/(d||1), ny=(f.pos.y-ppos.y)/(d||1);
+      f.pos.x=ppos.x+nx*groundR; f.pos.y=ppos.y+ny*groundR;
+      const pVelNew=planetVelocityAt(p,tNew);
+      const relSpeed=Math.hypot(f.vel.x-pVelNew.x,f.vel.y-pVelNew.y);
+      if(relSpeed<=SAFE_LANDING_SPEED){
+        f.status='landed'; f.statusMsg='Landed safely on '+p.name+'.'; shipListDirty=true;
+        f.landedOnPlanet=p; f.landedRelPos={x:nx*groundR,y:ny*groundR};
+        f.vel.x=pVelNew.x; f.vel.y=pVelNew.y;
+        f.engineOn=false; if(f===activeShip()) updateEngineBtn();
+      } else {
+        destroyShip(f,f.name+' was destroyed on impact with '+p.name+' at '+relSpeed.toFixed(0)+' u/s.');
+      }
+      return;
+    }
+  }
+}
 function integrate(f,dt,t){
   const mass=f.dryMass+f.fuel;
   const dom=findDominantBody(f.pos,t);
@@ -2203,7 +2334,7 @@ function integrate(f,dt,t){
       rax+=rcsA.ax; ray+=rcsA.ay;
     }
 
-    // Mouse-pull cheat — force is heliocentric so convert to relative frame
+    //Mouse pull had to be changed a bit with the moon update so this should fix the ray
     if(doPull){
       const wmouse=screenToWorld(flightMousePos.x,flightMousePos.y);
       const dmx=wmouse.x-f.pos.x, dmy=wmouse.y-f.pos.y;
@@ -2245,13 +2376,15 @@ function integrate(f,dt,t){
         }
         return;
       }
+    } else {
+      checkTunnelCollisions(f,dom.p,t+dt);
+      if(f._pendingRemoval) return;
     }
 
   } else {
-    // Interplanetary — Sun gravity only
+    //Beyond sun you have no soi, this is new because sun soi used to be infinite.
     f._domBody=null; f._inAtmo=false;
-    const g=gravAccel(f.pos,SUN_POS,GM_SUN);
-    let ax=g.ax, ay=g.ay;
+    let ax=0, ay=0;
 
     const activeThrustIP=fireEnginesAndDrainFuel(f,dt);
     if(activeThrustIP>0){
@@ -2276,34 +2409,17 @@ function integrate(f,dt,t){
 
     f.vel.x+=ax*dt; f.vel.y+=ay*dt;
     f.pos.x+=f.vel.x*dt; f.pos.y+=f.vel.y*dt;
-
-    if(Math.hypot(f.pos.x,f.pos.y)<=SUN_RADIUS){
-      destroyShip(f,f.name+' was vaporized by the Sun.'); return;
-    }
-
-    for(const p of PLANETS){
-      if(!p.solid) continue;
-      const ppos=planetPositionAt(p,t+dt);
-      const d=Math.hypot(f.pos.x-ppos.x,f.pos.y-ppos.y);
-      const foot=shipFootOffset(f);
-      const groundR=p.radius+foot;
-      if(d<=groundR){
-        const nx=(f.pos.x-ppos.x)/(d||1), ny=(f.pos.y-ppos.y)/(d||1);
-        f.pos.x=ppos.x+nx*groundR; f.pos.y=ppos.y+ny*groundR;
-        const pVelNew=planetVelocityAt(p,t+dt);
-        const relSpeed=Math.hypot(f.vel.x-pVelNew.x,f.vel.y-pVelNew.y);
-        if(relSpeed<=SAFE_LANDING_SPEED){
-          f.status='landed'; f.statusMsg='Landed safely on '+p.name+'.'; shipListDirty=true;
-          f.landedOnPlanet=p; f.landedRelPos={x:nx*groundR,y:ny*groundR};
-          f.vel.x=pVelNew.x; f.vel.y=pVelNew.y;
-          f.engineOn=false; if(f===activeShip()) updateEngineBtn();
-        } else {
-          destroyShip(f,f.name+' was destroyed on impact with '+p.name+' at '+relSpeed.toFixed(0)+' u/s.');
-        }
-        return;
-      }
-    }
   }
+}
+
+//sun uses legit radius for colliding instead of weird calculation claude code did for gas giants like 87 years ago
+function domSurfaceGap(dom){
+  const shrink=(dom.p===SUN_BODY)?dom.p.radius:(dom.p.solid?dom.p.radius:dom.p.radius*0.3);
+  return Math.max(1,dom.dist-shrink);
+}
+//Substep optimization when not in sun SOI
+function domSubstepCap(dom){
+  return (dom&&dom.p!==SUN_BODY)?SUBSTEP_DT_MAX_SOI:SUBSTEP_DT_MAX_INTERP;
 }
 
 // Adaptive substep sizing: aim to cross ~half the distance to the nearest
@@ -2321,12 +2437,10 @@ function stepSimSeconds(f,simSeconds,tStart,maxSubstepDtOverride){
   let remaining=simSeconds, t=tStart, steps=0;
   while(remaining>1e-6&&steps<MAX_SUBSTEPS_PER_FRAME&&f.status==='flying'){
     const dom=findDominantBody(f.pos,t);
-    // Use a tighter max-dt cap inside a planet's SOI so that high-warp passes
-    // stay accurate enough to match Nav Beacon ballistic predictions.
-    const maxDt=maxSubstepDtOverride!==undefined?maxSubstepDtOverride
-                :(dom?SUBSTEP_DT_MAX_SOI:SUBSTEP_DT_MAX_INTERP);
+    //Smaller dt max inside planet or moon soi compared to sun.
+    const maxDt=maxSubstepDtOverride!==undefined?maxSubstepDtOverride:domSubstepCap(dom);
     const nearest=dom
-      ?Math.max(1,dom.dist-(dom.p.solid?dom.p.radius:dom.p.radius*0.3))
+      ?domSurfaceGap(dom)
       :Math.max(1,Math.hypot(f.pos.x-SUN_POS.x,f.pos.y-SUN_POS.y)-SUN_RADIUS);
     let relVx=f.vel.x, relVy=f.vel.y;
     if(dom){ const pv=planetVelocityAt(dom.p,t); relVx-=pv.x; relVy-=pv.y; }
@@ -2379,9 +2493,9 @@ function beaconStepSimSeconds(f, simSeconds, tStart){
   let remaining=simSeconds, t=tStart, steps=0;
   while(remaining>1e-6 && steps<MAX_BEACON_STEPS && f.status==='flying'){
     const dom=findDominantBody(f.pos,t);
-    const maxDt=dom ? SUBSTEP_DT_MAX_SOI : SUBSTEP_DT_MAX_INTERP;
+    const maxDt=domSubstepCap(dom);
     const nearest=dom
-      ?Math.max(1,dom.dist-(dom.p.solid?dom.p.radius:dom.p.radius*0.3))
+      ?domSurfaceGap(dom)
       :Math.max(1,Math.hypot(f.pos.x-SUN_POS.x,f.pos.y-SUN_POS.y)-SUN_RADIUS);
     let relVx=f.vel.x, relVy=f.vel.y;
     if(dom){ const pv=planetVelocityAt(dom.p,t); relVx-=pv.x; relVy-=pv.y; }
@@ -2737,13 +2851,17 @@ function drawSun(){
   if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText('Sun',s.x+r+4,s.y+4); }
 }
 
-function drawOrbitPath(p){
+function drawOrbitPath(p,t){
   if(camera.metersPerPixel<20000) return; // only visible at medium/system zoom
+  if(p.parent===null) return; //sun has no parent and no orbit, like explained previously
+  const parent=BODIES_BY_KEY[p.parent];
+  if(parent.parent===p.key) return; //This is extremely hard to explain. Basically more binary star math.
+  const parentPos=planetPositionAt(parent,t);
   const e=p.ecc;
   const a=p.distance;
   const b=a*Math.sqrt(1-e*e);
-  const cx=-a*e;
-  const s=worldToScreen(cx,0);
+  const cx=parentPos.x-a*e, cy=parentPos.y;
+  const s=worldToScreen(cx,cy);
   const rx=a/camera.metersPerPixel, ry=b/camera.metersPerPixel;
   fctx.beginPath(); fctx.ellipse(s.x,s.y,rx,ry,camera.angle,0,Math.PI*2);
   fctx.strokeStyle='rgba(255,255,255,0.08)'; fctx.lineWidth=1; fctx.stroke();
@@ -3185,7 +3303,8 @@ function render(){
     fctx.restore();
   }
 
-  PLANETS.forEach(drawOrbitPath);
+  PLANETS.forEach(p=>drawOrbitPath(p,simTime));
+  drawSOICircle(SUN_BODY,simTime);
   PLANETS.forEach(p=>drawSOICircle(p,simTime));
   drawSun();
   PLANETS.forEach(p=>drawPlanet(p,simTime,{x:camera.x,y:camera.y}));
@@ -3214,7 +3333,7 @@ function render(){
       hud.speed.textContent=speed.toFixed(1)+' u/s';
       hud.altLabel.textContent='Altitude';
       hud.alt.textContent='-';
-      hud.soi.textContent='Sun (interplanetary)';
+      hud.soi.textContent='Deep space (beyond the Sun\u2019s SOI)';
     }
     hud.fuel.textContent=cheats.infiniteFuel?'∞':(sh.fuelCap?Math.round(100*sh.fuel/sh.fuelCap)+'%':'0%');
 
