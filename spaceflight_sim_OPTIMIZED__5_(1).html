@@ -1,0 +1,3582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spaceflight Sim — Build &amp; Launch</title>
+<style>
+  :root{
+    --primary:#1A1A1A;
+    --secondary:#EBEBEB;
+    --accent:#FF4500;
+    --bg:#FAFAFA;
+    --panel-bg:rgba(250,250,250,0.95);
+    --void:#141414;
+    --danger:#B3261E;
+    --ok:#2E7D32;
+    --font-head:Georgia,'Times New Roman',serif;
+    --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    --sp-1:2px; --sp-2:4px; --sp-3:8px; --sp-4:12px; --sp-5:18px; --sp-6:28px;
+  }
+  body.dark-mode{
+    --primary:#EDEDED;
+    --secondary:#333333;
+    --bg:#121212;
+    --panel-bg:rgba(20,20,20,0.94);
+    --danger:#FF6E62;
+    --ok:#4CAF50;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--primary);font-family:var(--font-body);overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100%;}
+
+  header{
+    padding:var(--sp-3) var(--sp-5);border-bottom:1px solid var(--primary);
+    display:flex;align-items:center;gap:var(--sp-4);background:var(--bg);flex-wrap:wrap;
+    transition:padding .15s ease;
+  }
+  header.collapsed{padding-top:var(--sp-2);padding-bottom:var(--sp-2);}
+  header.collapsed>*:not(#headerCollapseBtn){display:none;}
+  header h1{margin:0;font-family:var(--font-body);font-weight:800;font-size:21px;color:var(--primary);}
+  .header-actions{margin-left:auto;display:flex;align-items:center;gap:var(--sp-3);}
+  .vol-ctl{display:flex;align-items:center;gap:6px;}
+  .vol-icon{font-size:14px;width:18px;text-align:center;user-select:none;}
+  .vol-ctl input[type=range]{
+    -webkit-appearance:none;appearance:none;width:90px;height:4px;border-radius:2px;
+    background:var(--secondary);outline:none;cursor:pointer;
+  }
+  .vol-ctl input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:13px;height:13px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid var(--bg);
+  }
+  .vol-ctl input[type=range]::-moz-range-thumb{
+    width:13px;height:13px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--bg);
+  }
+  #headerCollapseBtn{
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);font-family:var(--font-body);
+    font-weight:700;font-size:11px;padding:6px 10px;border-radius:0;cursor:pointer;
+  }
+  #headerCollapseBtn:hover{border-color:var(--accent);color:var(--accent);}
+  .mode-btn{
+    background:var(--primary);border:1px solid var(--primary);color:var(--bg);
+    font-family:var(--font-body);font-weight:600;font-size:12px;padding:8px 16px;border-radius:0;cursor:pointer;letter-spacing:.02em;
+  }
+  .mode-btn:hover{background:var(--accent);border-color:var(--accent);}
+  .mode-btn.secondary{background:var(--bg);color:var(--primary);}
+  .mode-btn.secondary:hover{background:var(--primary);color:var(--bg);}
+
+  #screens{flex:1;display:flex;min-height:0;position:relative;}
+  .screen{flex:1;display:none;min-height:0;position:relative;}
+  .screen.active{display:flex;}
+
+  .float-panel{
+    position:absolute;background:var(--panel-bg);border:1px solid var(--primary);
+    border-radius:0;box-shadow:none;padding:var(--sp-4);z-index:2;
+  }
+  .float-panel h3{
+    margin:0 0 var(--sp-3);font-family:var(--font-body);font-weight:700;
+    font-size:13px;color:var(--primary);border-bottom:1px solid var(--secondary);padding-bottom:var(--sp-2);
+  }
+
+  /* BUILD SCREEN */
+  #buildScreen{padding:0;}
+  #gridCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;background:var(--void);z-index:0;}
+
+  .float-palette{top:var(--sp-5);left:var(--sp-5);width:240px;max-height:calc(100% - 2*var(--sp-5));overflow-y:auto;display:flex;flex-direction:column;gap:var(--sp-2);}
+  .part-card{background:var(--bg);border:1px solid var(--primary);padding:var(--sp-3);cursor:pointer;border-radius:0;}
+  .part-card:hover{border-color:var(--accent);}
+  .part-card.selected{border-color:var(--accent);background:#fff0ea;}
+  .part-card .pname{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:var(--sp-2);}
+  .part-card .swatch{width:11px;height:11px;border:1px solid var(--primary);flex-shrink:0;}
+  .part-card .pstats{font-size:10.5px;color:#555;margin-top:var(--sp-2);line-height:1.55;}
+
+  .float-stats{top:var(--sp-5);right:var(--sp-5);width:206px;}
+  .float-savedrockets{top:calc(var(--sp-5) + 216px);right:var(--sp-5);width:206px;max-height:220px;overflow-y:auto;}
+  .saved-rocket-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);font-size:11.5px;padding:5px 4px;border-bottom:1px solid var(--secondary);}
+  .saved-rocket-row:last-child{border-bottom:none;}
+  .saved-rocket-row .rocket-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .stat-line{display:flex;justify-content:space-between;font-size:12px;padding:2px 0;}
+  .stat-line b{color:var(--accent);font-weight:700;}
+  .warn-text{font-size:11px;color:var(--danger);margin-top:var(--sp-3);font-weight:600;}
+
+  .float-zoom{bottom:var(--sp-5);right:var(--sp-5);display:flex;gap:var(--sp-2);padding:var(--sp-2);}
+  .icon-btn{
+    width:30px;height:30px;background:var(--bg);border:1px solid var(--primary);color:var(--primary);
+    font-family:var(--font-body);font-weight:700;font-size:15px;cursor:pointer;border-radius:0;
+    display:flex;align-items:center;justify-content:center;padding:0;
+  }
+  .icon-btn:hover{background:var(--primary);color:var(--bg);}
+
+  #buildActionBar{bottom:var(--sp-5);left:50%;transform:translateX(-50%);display:flex;gap:var(--sp-3);padding:var(--sp-3);}
+  .btn{
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);font-family:var(--font-body);
+    font-weight:600;font-size:12.5px;padding:10px 18px;border-radius:0;cursor:pointer;letter-spacing:.02em;
+  }
+  .btn:hover{border-color:var(--accent);color:var(--accent);}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--bg);}
+  .btn.primary:hover{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.primary:disabled{opacity:.35;cursor:not-allowed;background:var(--secondary);color:#888;border-color:var(--secondary);}
+  .btn.danger:hover{border-color:var(--danger);color:var(--danger);}
+  .btn.small{padding:6px 10px;font-size:11px;}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  .float-hint{bottom:var(--sp-5);left:var(--sp-5);font-size:10.5px;color:#444;padding:6px 10px;}
+
+  /* FLIGHT SCREEN */
+  #flightScreen{padding:0;}
+  #flightCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:var(--void);z-index:0;cursor:crosshair;}
+
+  .float-hud{top:var(--sp-5);left:var(--sp-5);width:206px;}
+  .hline{display:flex;justify-content:space-between;gap:var(--sp-4);font-size:11.5px;padding:2px 0;}
+  .hline b{color:var(--accent);font-weight:700;text-align:right;}
+  #typeEditPanel{margin-top:var(--sp-3);border-top:1px solid var(--secondary);padding-top:var(--sp-3);}
+  .te-input{
+    width:76px;background:var(--bg);border:1px solid var(--primary);color:var(--primary);
+    font-family:var(--font-body);font-size:11px;padding:2px 4px;border-radius:0;text-align:right;
+  }
+  #status-msg{margin-top:var(--sp-3);font-size:12px;font-weight:700;min-height:16px;}
+  .status-land{color:var(--ok);}
+  .status-crash{color:var(--danger);}
+
+  /* top is set in JS by positionShipList() — it depends on the HUD's actual
+     height, which changes when the TypeEdit cheat panel is toggled, so a
+     fixed offset here would drift out of sync and overlap it. */
+  .float-ships{left:var(--sp-5);width:206px;max-height:160px;overflow-y:auto;display:none;}
+  .ship-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);font-size:11.5px;padding:5px 4px;cursor:pointer;border-bottom:1px solid var(--secondary);}
+  .ship-row:last-child{border-bottom:none;}
+  .ship-row.active{background:#fff0ea;font-weight:700;}
+  .ship-row .ship-status{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:#777;}
+  .ship-row .status-crashed{color:var(--danger);}
+  .ship-row .status-landed{color:var(--ok);}
+  .ship-row .ship-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ship-row .ship-del{
+    flex-shrink:0;background:none;border:1px solid var(--secondary);color:var(--danger);
+    font-family:var(--font-body);font-size:10px;line-height:1;padding:3px 6px;cursor:pointer;border-radius:0;
+  }
+  .ship-row .ship-del:hover{border-color:var(--danger);background:var(--danger);color:#fff;}
+
+  .float-staging{top:var(--sp-5);left:calc(var(--sp-5) + 224px);width:180px;max-height:260px;overflow-y:auto;display:none;}
+  .stage-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);padding:4px 0;}
+  .stage-row span{font-size:11px;}
+  .engine-row .btn{min-width:38px;text-align:center;}
+
+  .float-zoompresets{top:var(--sp-5);right:var(--sp-5);display:flex;flex-direction:column;gap:var(--sp-2);padding:var(--sp-2);}
+  .zbtn{
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);font-family:var(--font-body);
+    font-weight:600;font-size:11.5px;padding:8px 12px;cursor:pointer;border-radius:0;text-align:left;
+  }
+  .zbtn:hover{border-color:var(--accent);color:var(--accent);}
+
+  /* Fuel tanks panel */
+  .float-fuel{
+    top:calc(var(--sp-5) + 168px);right:var(--sp-5);width:192px;max-height:150px;overflow-y:auto;display:none;
+  }
+  .fuel-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);font-size:10.5px;padding:3px 0;border-bottom:1px solid var(--secondary);}
+  .fuel-row:last-child{border-bottom:none;}
+  .fuel-row .fuel-name{flex-shrink:0;}
+  .fuel-row .fuel-bar-wrap{flex:1;height:6px;background:var(--secondary);position:relative;}
+  .fuel-row .fuel-bar{position:absolute;left:0;top:0;bottom:0;background:var(--accent);}
+  .fuel-row .fuel-pct{flex-shrink:0;width:30px;text-align:right;font-weight:700;color:var(--accent);}
+
+  /* Cheats panel — pushed below the fuel tanks panel */
+  .float-cheats{
+    top:calc(var(--sp-5) + 168px + 174px);right:var(--sp-5);width:192px;
+  }
+  .float-buildcheats{
+    top:calc(var(--sp-5) + 216px + 230px);right:var(--sp-5);width:192px;
+  }
+  .cheat-row{display:flex;align-items:center;gap:var(--sp-2);font-size:11.5px;padding:3px 0;cursor:pointer;}
+  .cheat-row input[type=checkbox]{accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+  .cheat-row label{cursor:pointer;user-select:none;}
+  .cheat-tag{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:#fff;background:var(--accent);padding:1px 4px;margin-left:4px;vertical-align:middle;}
+
+  /* Planet nav context menu */
+  #planetCtxMenu{display:none;width:200px;z-index:10;}
+  #planetCtxMenu button{width:100%;margin-top:6px;}
+
+  /* Nav arrow overlay — drawn on canvas; this is just the text info panel */
+  #navArrowPanel{
+    position:absolute;bottom:calc(var(--sp-5) + 56px);left:50%;transform:translateX(-50%);
+    background:rgba(0,80,0,0.88);border:1px solid #00cc44;color:#ccffcc;
+    font-family:var(--font-body);font-size:11.5px;padding:7px 14px;z-index:3;
+    display:none;white-space:nowrap;text-align:center;pointer-events:none;
+  }
+  #navArrowPanel b{color:#00ff66;}
+
+  #controls-bar{
+    bottom:var(--sp-5);left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:var(--sp-5);flex-wrap:wrap;justify-content:center;max-width:92%;
+    padding:var(--sp-3) var(--sp-4);
+  }
+  .ctl-group{display:flex;align-items:center;gap:var(--sp-2);}
+  .ctl-label{font-size:9.5px;color:#666;letter-spacing:.06em;font-weight:700;text-transform:uppercase;}
+  .warp-btn{
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);font-family:var(--font-body);
+    font-weight:600;font-size:11px;padding:5px 9px;cursor:pointer;border-radius:0;
+  }
+  .warp-btn:hover{border-color:var(--accent);}
+  .warp-btn.active{background:var(--primary);color:var(--bg);border-color:var(--primary);}
+  .warp-btn:disabled{opacity:.3;cursor:not-allowed;}
+  #engineToggle{
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);font-family:var(--font-body);
+    font-size:12px;padding:8px 16px;cursor:pointer;font-weight:700;border-radius:0;
+  }
+  #engineToggle.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  #engineToggle:disabled{opacity:.4;cursor:not-allowed;}
+  #chuteToggle{
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);font-family:var(--font-body);
+    font-size:12px;padding:8px 16px;cursor:pointer;font-weight:700;border-radius:0;display:none;
+  }
+  #chuteToggle.on{background:#2E7D32;border-color:#2E7D32;color:#fff;}
+  input[type=range]{width:90px;accent-color:var(--accent);}
+
+  #shipCtxMenu{display:none;width:170px;z-index:10;}
+  #shipCtxMenu button{width:100%;margin-top:6px;}
+
+  #toastMsg{
+    position:fixed;top:14px;left:50%;transform:translateX(-50%);
+    background:var(--primary);color:var(--bg);font-family:var(--font-body);font-weight:600;
+    font-size:12px;padding:9px 16px;z-index:50;opacity:0;transition:opacity .3s ease;pointer-events:none;
+    max-width:70%;text-align:center;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="appHeader">
+    <button id="headerCollapseBtn" title="Collapse header">▾ Collapse</button>
+    <h1>Spaceflight Sim</h1>
+    <div class="header-actions">
+      <div class="vol-ctl" title="Music volume">
+        <span class="vol-icon" id="volIcon">🔊</span>
+        <input type="range" id="volSlider" min="0" max="100" value="35" step="1">
+      </div>
+      <button class="mode-btn secondary" id="darkModeBtn">🌙 Dark Mode</button>
+      <button class="mode-btn" id="toBuildBtn" style="display:none;">← Back to Build</button>
+    </div>
+  </header>
+
+  <div id="screens">
+    <!-- BUILD -->
+    <div class="screen active" id="buildScreen">
+      <canvas id="gridCanvas"></canvas>
+
+      <div class="float-panel float-palette" id="palette"><h3>Parts</h3></div>
+
+      <div class="float-panel float-stats" id="statsPanel">
+        <h3>Rocket stats</h3>
+        <div class="stat-line"><span>Dry mass</span><b id="s-dry">—</b></div>
+        <div class="stat-line"><span>Fuel mass</span><b id="s-fuel">—</b></div>
+        <div class="stat-line"><span>Total thrust</span><b id="s-thrust">—</b></div>
+        <div class="stat-line"><span>Thrust/weight</span><b id="s-twr">—</b></div>
+        <div class="stat-line"><span>Est. Δv</span><b id="s-dv">—</b></div>
+        <div class="warn-text" id="s-warn"></div>
+      </div>
+
+      <div class="float-panel float-zoom">
+        <button class="icon-btn" id="gridZoomOut" title="Zoom out">–</button>
+        <button class="icon-btn" id="gridZoomReset" title="Reset view">⟳</button>
+        <button class="icon-btn" id="gridZoomIn" title="Zoom in">+</button>
+      </div>
+
+      <div class="float-panel" id="buildActionBar">
+        <button class="btn danger" id="clearBtn">Clear rocket</button>
+        <button class="btn" id="saveRocketBtn">Save Rocket</button>
+        <button class="btn primary" id="launchBtn">Launch ▲</button>
+      </div>
+
+      <div class="float-panel float-savedrockets" id="savedRocketsPanel">
+        <h3>Saved Rockets</h3>
+        <div id="savedRocketsList"></div>
+      </div>
+
+      <div class="float-panel float-buildcheats" id="buildCheatsPanel">
+        <h3>Cheats <span class="cheat-tag">dev</span></h3>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatNoclip">
+          <label for="cheatNoclip">Noclip (overlap parts)</label>
+        </div>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatBigGrid">
+          <label for="cheatBigGrid">More Build Space (64x96)</label>
+        </div>
+      </div>
+
+      <div class="float-panel float-hint" id="buildHint">Click: place part &nbsp;·&nbsp; Right-click: remove &nbsp;·&nbsp; R: rotate 90&deg; (hover a placed part to rotate it) &nbsp;·&nbsp; Drag: pan &nbsp;·&nbsp; Scroll: zoom</div>
+    </div>
+
+    <!-- FLIGHT -->
+    <div class="screen" id="flightScreen">
+      <canvas id="flightCanvas"></canvas>
+
+      <div class="float-panel float-hud" id="hud">
+        <h3>Telemetry</h3>
+        <div class="hline"><span>Speed</span><b id="h-speed">0.0 u/s</b></div>
+        <div class="hline"><span id="h-altLabel">Alt (Earth)</span><b id="h-alt">—</b></div>
+        <div class="hline"><span>Dist. Sun</span><b id="h-altS">—</b></div>
+        <div class="hline"><span>Sphere of influence</span><b id="h-soi">—</b></div>
+        <div class="hline"><span>Fuel</span><b id="h-fuel">100%</b></div>
+        <div class="hline"><span>Throttle</span><b id="h-throttle">100%</b></div>
+        <div class="hline"><span>Warp</span><b id="h-warp">1×</b></div>
+        <div id="status-msg" class="status-land"></div>
+        <div id="typeEditPanel" style="display:none;">
+          <div class="hline"><span>Set Speed (u/s)</span><input class="te-input" type="number" id="te-speed"></div>
+          <div class="hline"><span>Set Altitude (u)</span><input class="te-input" type="number" id="te-alt"></div>
+          <div class="hline"><span>Set Fuel (%)</span><input class="te-input" type="number" id="te-fuel"></div>
+          <div class="hline"><span>Set Throttle (%)</span><input class="te-input" type="number" id="te-throttle"></div>
+          <div class="hline"><span>Set Warp (×)</span><input class="te-input" type="number" id="te-warp"></div>
+        </div>
+      </div>
+
+      <div class="float-panel float-staging" id="stagingPanel" style="display:none;">
+        <h3 id="stagingTitle">Staging</h3>
+        <div id="stagingList"></div>
+      </div>
+
+      <div class="float-panel float-ships" id="shipList" style="display:none;"><h3>Ships</h3></div>
+
+      <!-- Zoom presets -->
+      <div class="float-panel float-zoompresets" id="zoomPresets">
+        <button class="zbtn" data-z="0.4">Ship view</button>
+        <button class="zbtn" data-z="3000000">Orbit view</button>
+        <button class="zbtn" data-z="80000000">System view</button>
+      </div>
+
+      <!-- Per-tank fuel levels -->
+      <div class="float-panel float-fuel" id="fuelPanel" style="display:none;">
+        <h3>Fuel Tanks</h3>
+        <div id="fuelList"></div>
+      </div>
+
+      <!-- Cheats panel -->
+      <div class="float-panel float-cheats" id="cheatsPanel">
+        <h3>Cheats <span class="cheat-tag">dev</span></h3>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatInfiniteFuel">
+          <label for="cheatInfiniteFuel">Infinite Fuel</label>
+        </div>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatMousePull">
+          <label for="cheatMousePull">Mouse Pull (hold click)</label>
+        </div>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatCamRotate" checked>
+          <label for="cheatCamRotate">Rotate Cam with Ship</label>
+        </div>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatNavBeacon">
+          <label for="cheatNavBeacon">Nav Beacon</label>
+        </div>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatTypeEdit">
+          <label for="cheatTypeEdit">TypeEdit (edit Telemetry)</label>
+        </div>
+      </div>
+
+      <!-- Planet nav context menu (shown when clicking a planet with Nav Beacon on) -->
+      <div class="float-panel" id="planetCtxMenu" style="display:none;">
+        <h3 id="planetCtxName">Planet</h3>
+        <div id="planetCtxInfo" style="font-size:10.5px;color:#555;margin-bottom:4px;"></div>
+        <button class="btn small primary" id="planetCtxNavBtn">Navigate here</button>
+        <button class="btn small" id="planetCtxCloseBtn">Close</button>
+      </div>
+
+      <!-- Nav arrow panel -->
+      <div id="navArrowPanel"></div>
+
+      <div class="float-panel" id="shipCtxMenu" style="display:none;">
+        <h3 id="ctxShipName">Ship</h3>
+        <button class="btn small" id="ctxSwitchBtn">Switch to this ship</button>
+        <button class="btn small danger" id="ctxDeleteBtn">Delete ship</button>
+      </div>
+
+      <div class="float-panel" id="controls-bar">
+        <div class="ctl-group"><button id="engineToggle" disabled>ENGINE: OFF</button></div>
+        <div class="ctl-group"><button id="chuteToggle" style="display:none;">CHUTE: STOWED</button></div>
+        <div class="ctl-group">
+          <span class="ctl-label">Throttle</span>
+          <input type="range" id="throttleSlider" min="0" max="100" value="100">
+        </div>
+        <div class="ctl-group"><span class="ctl-label">Rotate ◄ A/D ►</span></div>
+        <div class="ctl-group" id="warpGroup"><span class="ctl-label">Warp</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toastMsg"></div>
+
+<script>
+(function(){
+"use strict";
+const el = id => document.getElementById(id);
+
+el('headerCollapseBtn').onclick=()=>{
+  const collapsed=el('appHeader').classList.toggle('collapsed');
+  el('headerCollapseBtn').textContent=collapsed?'▸ Expand':'▾ Collapse';
+};
+el('darkModeBtn').onclick=()=>{
+  const dark=document.body.classList.toggle('dark-mode');
+  el('darkModeBtn').textContent=dark?'☀️ Light Mode':'🌙 Dark Mode';
+};
+// Cached telemetry element refs — render() updates these every frame, so we
+// look them up once instead of calling getElementById per field per frame.
+const hud = {
+  speed:el('h-speed'), altLabel:el('h-altLabel'), alt:el('h-alt'), altS:el('h-altS'),
+  soi:el('h-soi'), fuel:el('h-fuel'), throttle:el('h-throttle'), warp:el('h-warp'),
+  status:el('status-msg'),
+};
+
+// ============================================================
+// CONFIG
+// ============================================================
+let COLS = 24, ROWS = 75; // mutable — buildBigGrid cheat resizes these
+const CELL_WORLD = 4;
+const BASE_CELL = 20;
+const GRID_MIN_ZOOM = 0.35, GRID_MAX_ZOOM = 4;
+const SPRITE_RASTER_CELL = 64;
+
+// Gameplay-scaled solar system, not a uniform real-world multiple — distance,
+// radius, and gravity each have their own scaling constant below (GM_SUN_MULT,
+// ORBIT_PERIOD_CALIBRATION_MULT, PLANET_GM_MULT) so build/launch/travel stay playable.
+const AU = 1496000000;
+const SUN_RADIUS = 3800000;
+const SUN_POS = {x:0, y:0};
+
+const SAFE_LANDING_SPEED = 300;
+const MAX_SUBSTEPS_PER_FRAME = 2500;
+// Real seconds in a year, used only to derive GM_SUN — planets do NOT take a
+// real year to orbit (see ORBIT_PERIOD_CALIBRATION_MULT, which shortens them).
+const ORBIT_YEAR_SECONDS = 31557600;
+// Scales the Sun's gravity up from the pure Kepler value (stronger solar
+// pull/escape velocity). Kept independent of ORBIT_PERIOD_CALIBRATION_MULT so
+// changing solar gravity doesn't affect how fast planets orbit.
+const GM_SUN_MULT = 150;
+const GM_SUN = 4 * Math.PI * Math.PI * AU * AU * AU / (ORBIT_YEAR_SECONDS * ORBIT_YEAR_SECONDS) * GM_SUN_MULT;
+// Artificial factor planet orbital periods (which run on rails via omega, not
+// simulated gravity) are calibrated against — independent of GM_SUN_MULT so
+// solar gravity strength doesn't alter planet pacing. Periods are divided by
+// sqrt(this), so they're shorter than real life by that factor (Earth's
+// in-sim year ≈ 115.5 days, not 365.25).
+const ORBIT_PERIOD_CALIBRATION_MULT = 10;
+// Multiplies planet gravity wells so escaping them is a real challenge. Raises
+// actual surface gravity to surfG*PLANET_GM_MULT — weight/TWR math must use
+// that value, not the raw surfG.
+const PLANET_GM_MULT = 10;
+// Extra scale on top of the Hill-sphere formula, to size spheres of influence
+// independently of the gravity values above.
+const SOI_SCALE = 0.4;
+// Gameplay drag: exponential velocity decay from an artificial density based
+// on atmosphere depth (see integrate()), not a real aerodynamic model — tuned
+// so atmosphere alone won't safely stop a descent; needs chute or engine too.
+const ATMO_DRAG_K = 0.05;
+const PARACHUTE_DRAG_MULT = 40;
+const GAS_GIANT_CRUSH_DEPTH = 0.4;
+const WARP_LEVELS = [1,5,25,100,1000,10000,100000,1000000];
+const ATMO_ZOOM_ENTER_MPP = 30;  // camera snaps to this zoom on atmosphere entry
+const ATMO_ZOOM_MAX_MPP  = 50;   // max zoom-out allowed while inside atmosphere
+const MOUSE_PULL_ACCEL = 1500;   // acceleration from the mouse-pull cheat (u/s²)
+// Launch pad height above the surface — shared by launch() (spawn height) and
+// drawLaunchPad() (visuals) so they can't drift apart.
+const LAUNCH_PAD_HEIGHT = 8;
+
+// ============================================================
+// SOLAR SYSTEM — gameplay-scaled radii/distances/gravity, not a
+// uniform real-world multiple (see comments above)
+// ============================================================
+const PLANET_DEFS = [
+  {key:'mercury',name:'Mercury',color:'#9c8d7b',groundColor:'#8a7d6d',radius:32000, surfG:3.7, distAU:0.387, periodDays:88,     solid:true, atmo:false},
+  {key:'venus',  name:'Venus',  color:'#d9b96a',groundColor:'#caa050',radius:90000, surfG:8.9, distAU:0.723, periodDays:225,    solid:true, atmo:true,  atmoFrac:0.5, atmoColor:'#c9a84c'},
+  {key:'earth',  name:'Earth',  color:'#3f7fdb',groundColor:'#46a256',radius:150000,surfG:11,  distAU:1.0,   periodDays:365.25, solid:true, atmo:true,  atmoFrac:0.3, atmoColor:'#5599dd'},
+  {key:'mars',   name:'Mars',   color:'#c1440e',groundColor:'#9c3d17',radius:82000, surfG:6.0, distAU:1.524, periodDays:687,    solid:true, atmo:true,  atmoFrac:0.15,atmoColor:'#8B4010'},
+  {key:'jupiter',name:'Jupiter',color:'#d8ac6d',groundColor:null,     radius:950000,surfG:48,  distAU:5.203, periodDays:4333,   solid:false,atmo:true,  atmoColor:'#c49050'},
+  {key:'saturn', name:'Saturn', color:'#e3c887',groundColor:null,     radius:800000,surfG:32,  distAU:9.537, periodDays:10759,  solid:false,atmo:true,  atmoColor:'#d4b85a'},
+  {key:'uranus', name:'Uranus', color:'#a7dede',groundColor:null,     radius:440000,surfG:19,  distAU:19.191,periodDays:30687,  solid:false,atmo:true,  atmoColor:'#70c8c8'},
+  {key:'neptune',name:'Neptune',color:'#4f6bf6',groundColor:null,     radius:420000,surfG:21,  distAU:30.07, periodDays:60190,  solid:false,atmo:true,  atmoColor:'#3355cc'},
+  {key:'pluto',  name:'Pluto',  color:'#c9b8a8',groundColor:'#cfcfcf',radius:18000, surfG:1.3, distAU:39.48, periodDays:90560,  solid:true, atmo:false},
+];
+const PLANETS = PLANET_DEFS.map((p,i)=>{
+  const distance = p.distAU*AU;
+  const GM = p.surfG*p.radius*p.radius*PLANET_GM_MULT; // actual in-sim gravity well
+  // GMbase intentionally excludes PLANET_GM_MULT: SOI is a gameplay size, kept
+  // stable regardless of how strong the boosted surface gravity is.
+  const GMbase = p.surfG*p.radius*p.radius;
+  // Divide period by sqrt(ORBIT_PERIOD_CALIBRATION_MULT) — the artificial
+  // pacing factor, independent of the Sun's actual gravity strength (GM_SUN_MULT).
+  const periodSimSeconds = (p.periodDays/365.25)*ORBIT_YEAR_SECONDS/Math.sqrt(ORBIT_PERIOD_CALIBRATION_MULT);
+  const omega = 2*Math.PI/periodSimSeconds;
+  const initialAngle = (i/PLANET_DEFS.length)*Math.PI*2;
+  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*GM_SUN))*SOI_SCALE);
+  return Object.assign({},p,{distance,GM,omega,initialAngle,soi});
+});
+function planetPositionAt(p,simTime){
+  const a = p.initialAngle+p.omega*simTime;
+  return {x:p.distance*Math.cos(a), y:p.distance*Math.sin(a)};
+}
+const EARTH = PLANETS.find(p=>p.key==='earth');
+// Actual simulated surface gravity (GM/r²), equal to surfG*PLANET_GM_MULT.
+// Build-screen TWR must use this, not the raw pre-multiplier EARTH.surfG,
+// or displayed TWR will be off by a factor of PLANET_GM_MULT.
+const EARTH_SURF_G = EARTH.GM/(EARTH.radius*EARTH.radius);
+
+// ============================================================
+// PART DEFINITIONS — thrust/fuel values are gameplay-tuned, not
+// modeled on any real engine
+// ============================================================
+const PARTS = {
+  pod:   {id:'pod',  name:'Command Pod',       w:2,h:4,dryMass:800, fuel:0,    thrust:0,      fuelRate:0,  color:'#8fb7ff',type:'pod'},
+  tankS: {id:'tankS',name:'Fuel Tank — Small', w:2,h:4,dryMass:400, fuel:1800, thrust:0,      fuelRate:0,  color:'#c7cdd6',type:'tank'},
+  tankM: {id:'tankM',name:'Fuel Tank — Medium',w:4,h:6,dryMass:700, fuel:4200, thrust:0,      fuelRate:0,  color:'#aab2bd',type:'tank'},
+  tankL: {id:'tankL',name:'Fuel Tank — Large', w:4,h:8,dryMass:1100,fuel:8000, thrust:0,      fuelRate:0,  color:'#8d96a3',type:'tank'},
+  engB:  {id:'engB', name:'Basic Engine',      w:2,h:3,dryMass:500, fuel:0,    thrust:1200000, fuelRate:37.5, color:'#ff8a4c',type:'engine'},
+  engA:  {id:'engA', name:'Advanced Engine',   w:4,h:3,dryMass:650, fuel:0,    thrust:1900000, fuelRate:45,   color:'#ff5c4c',type:'engine'},
+  chute: {id:'chute',name:'Parachute',         w:2,h:2,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#f2f2f2',type:'chute'},
+  sep:   {id:'sep',  name:'Separator',         w:4,h:1,dryMass:80,  fuel:0,    thrust:0,      fuelRate:0,  color:'#333333',type:'separator'},
+  dock:  {id:'dock', name:'Docking Port',      w:2,h:1,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#4CAF50',type:'dock'},
+  rcs:   {id:'rcs',  name:'RCS Thruster',      w:1,h:2,dryMass:80,  fuel:0,    thrust:120000, fuelRate:3,  color:'#5cc9ff',type:'rcs'},
+  wheel: {id:'wheel',name:'Wheel',             w:2,h:2,dryMass:150, fuel:0,    thrust:0,      fuelRate:0,  color:'#3a3a3a',type:'wheel'},
+  coneS: {id:'coneS',name:'Nose Cone — Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',dragMult:0.7},
+  coneM: {id:'coneM',name:'Nose Cone — Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',dragMult:0.55},
+  coneL: {id:'coneL',name:'Nose Cone — Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',dragMult:0.4},
+};
+const PART_LIST = Object.values(PARTS);
+
+// ============================================================
+// PART RENDERING
+// ============================================================
+function roundRectPath(ctx,x,y,w,h,r){
+  r=Math.max(0,Math.min(r,w/2,h/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+function shadeColor(hex,amt){
+  const c=hex.replace('#','');
+  const num=parseInt(c,16);
+  let r=(num>>16)+Math.round(255*amt),g=((num>>8)&0xff)+Math.round(255*amt),b=(num&0xff)+Math.round(255*amt);
+  r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
+  return 'rgb('+r+','+g+','+b+')';
+}
+function drawPartShape(ctx,d,x,y,w,h){
+  ctx.save();
+  if(d.type==='pod'){
+    const noseH=h*0.34;
+    ctx.beginPath();
+    ctx.moveTo(x,y+h); ctx.lineTo(x,y+noseH);
+    ctx.quadraticCurveTo(x,y,x+w/2,y); ctx.quadraticCurveTo(x+w,y,x+w,y+noseH);
+    ctx.lineTo(x+w,y+h); ctx.closePath();
+  } else if(d.type==='engine'){
+    ctx.beginPath();
+    ctx.moveTo(x+w*0.12,y); ctx.lineTo(x+w*0.88,y);
+    ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h); ctx.closePath();
+  } else if(d.type==='chute'){
+    ctx.beginPath();
+    ctx.moveTo(x,y+h); ctx.lineTo(x,y+h*0.35);
+    ctx.quadraticCurveTo(x,y,x+w/2,y); ctx.quadraticCurveTo(x+w,y,x+w,y+h*0.35);
+    ctx.lineTo(x+w,y+h); ctx.closePath();
+  } else if(d.type==='separator'){
+    roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.1);
+  } else if(d.type==='cone'){
+    ctx.beginPath();
+    ctx.moveTo(x+w/2,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h); ctx.closePath();
+  } else if(d.type==='wheel'){
+    roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.5);
+  } else {
+    roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.12);
+  }
+  if(d.type==='engine'){
+    ctx.fillStyle=d.color; ctx.fill();
+  } else {
+    const grad=ctx.createLinearGradient(x,y,x+w,y);
+    grad.addColorStop(0,shadeColor(d.color,-0.18));
+    grad.addColorStop(0.42,shadeColor(d.color,0.14));
+    grad.addColorStop(0.58,shadeColor(d.color,0.14));
+    grad.addColorStop(1,shadeColor(d.color,-0.22));
+    ctx.fillStyle=grad; ctx.fill();
+  }
+  ctx.lineWidth=Math.max(1,w*0.02);
+  ctx.strokeStyle='rgba(0,0,0,0.45)'; ctx.stroke();
+  if(d.type==='tank'){
+    ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.lineWidth=Math.max(1,h*0.014);
+    [0.16,0.84].forEach(t=>{
+      ctx.beginPath(); ctx.moveTo(x+w*0.08,y+h*t); ctx.lineTo(x+w*0.92,y+h*t); ctx.stroke();
+    });
+  }
+  if(d.type==='engine'){
+    ctx.fillStyle='rgba(20,10,5,0.65)';
+    ctx.beginPath();
+    ctx.ellipse(x+w/2,y+h*0.94,w*0.32,h*0.09,0,0,Math.PI*2);
+    ctx.fill();
+  }
+  if(d.type==='pod'){
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(x+w*0.34,y+h*0.32,w*0.1,h*0.14,0,0,Math.PI*2);
+    ctx.fill();
+  }
+  if(d.type==='chute'){
+    ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=Math.max(1,h*0.05);
+    [0.3,0.5,0.7].forEach(t=>{
+      ctx.beginPath(); ctx.moveTo(x+w*t,y+h*0.15); ctx.lineTo(x+w*t,y+h*0.88); ctx.stroke();
+    });
+  }
+  if(d.type==='separator'){
+    ctx.strokeStyle='rgba(255,255,255,0.5)';
+    ctx.setLineDash([w*0.08,w*0.06]);
+    ctx.lineWidth=Math.max(1,h*0.35);
+    ctx.beginPath(); ctx.moveTo(x+w*0.05,y+h/2); ctx.lineTo(x+w*0.95,y+h/2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if(d.type==='dock'){
+    ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=Math.max(1,h*0.12);
+    ctx.strokeRect(x+w*0.2,y+h*0.15,w*0.6,h*0.7);
+  }
+  if(d.type==='wheel'){
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.arc(x+w/2,y+h/2,Math.min(w,h)*0.18,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+// Draws a part rotated about its own center. (cx,cy) = center in pixel
+// space; nw,nh = the part's UNROTATED (natural, d.w×d.h-proportioned) pixel
+// size — the rotation transform itself performs the visual w/h swap, so
+// drawPartShape always draws at its natural aspect inside the rotated frame.
+function drawPartShapeRotated(ctx,d,cx,cy,nw,nh,rot){
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate((rot||0)*Math.PI/180);
+  drawPartShape(ctx,d,-nw/2,-nh/2,nw,nh);
+  ctx.restore();
+}
+// Yellow direction arrow, drawn pointing "up" in the part's own local frame
+// (before rotation) — for every part this is the default/rot-0 heading; for
+// docking ports specifically, local "up" IS the connecting/open side by
+// convention (rot=0 => open side up), so the same arrow doubles as the
+// dock's connection indicator once rotated into place.
+function drawDirArrow(ctx,cx,cy,nw,nh,rot){
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate((rot||0)*Math.PI/180);
+  const len=Math.min(nw,nh)*0.85, headW=len*0.36, shaftW=len*0.14;
+  const tipY=-nh*0.42, baseY=tipY+len*0.62;
+  ctx.fillStyle='#FFD500';
+  ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=Math.max(1,len*0.05);
+  ctx.beginPath();
+  ctx.moveTo(0,tipY);
+  ctx.lineTo(headW/2,baseY);
+  ctx.lineTo(shaftW/2,baseY);
+  ctx.lineTo(shaftW/2,baseY+len*0.38);
+  ctx.lineTo(-shaftW/2,baseY+len*0.38);
+  ctx.lineTo(-shaftW/2,baseY);
+  ctx.lineTo(-headW/2,baseY);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let mode = 'build';
+let selectedPartId = 'pod';
+let selectedRot = 0; // 0/90/180/270 — rotation applied to the NEXT part placed (ghost preview)
+let placedParts = [];
+let partUidCounter = 0; // unique id per placed part instance — lets tanks/engines carry their own state
+let hoverCell = null;
+let panState = null;
+let gridCam = {x:COLS/2, y:ROWS/2, zoom:1, inited:false};
+let simTime = 0;
+
+// Cheat flags
+const cheats = {
+  infiniteFuel: false,
+  mousePull: false,
+  camRotate: true,
+  navBeacon: false,
+  typeEdit: false,
+  buildNoclip: false,   // build mode only — skip part overlap check
+  buildBigGrid: false,  // build mode only — 64x96 grid instead of 24x75
+};
+const WHEEL_SPEED = 20;       // u/s along a planet's surface while landed
+const DOCK_SNAP_RADIUS = 60;  // u — distance at which two dock ports merge
+const SHIP_COLLIDE_SAFE_SPEED = 300; // u/s — above this, ship-ship impact destroys both
+
+// Nav Beacon state
+let navBeaconPath = [];          // [{x,y,body?,relX?,relY?}] — 15-second predicted trajectory
+let navTargetPlanet = null;      // planet the player wants to navigate to
+let navDeltaV = null;            // {dvx, dvy, mag, interceptT, burnSimTime, waitSecs, burnPos} — frozen intercept plan
+let navCtxPlanet = null;         // planet currently shown in the planet ctx menu
+let navBurnWarpDropped = false;  // guards the one-time auto-warp-drop as the burn window approaches
+let navBurnTargetVel = null;     // {x,y} absolute velocity the ship should reach — captured once the burn window opens
+let navPlanCoastPath = [];       // [{t,x,y,vx,vy}] — frozen coast trajectory from plan time to burnSimTime, used to force the ship back onto the plan each frame (see loop())
+let navBurnDone = false;         // true once the burn's remaining Δv has snapped under threshold — gates the post-burn forced coast
+let navPostBurnCoastPath = [];   // [{t,x,y,vx,vy}] — frozen coast trajectory from burn completion to the planned intercept arrival; forced onto the ship the same way navPlanCoastPath is
+
+
+// Mouse-pull tracking
+let flightMousePos = {x:0, y:0};
+let flightMouseDown = false;
+
+const gridCanvas = el('gridCanvas');
+// alpha:false — this canvas fully repaints its background every frame, so
+// telling the browser it's opaque skips alpha-compositing work.
+const gctx = gridCanvas.getContext('2d',{alpha:false});
+gctx.imageSmoothingEnabled = true;
+if('imageSmoothingQuality' in gctx) gctx.imageSmoothingQuality='high';
+
+function fitCanvasToDisplay(canvas,ctx){
+  // Cap DPR: on very high-density/weak-GPU combinations an uncapped ratio
+  // can demand a much larger backing buffer than the display can usefully
+  // show; 2x is already sharp and keeps the pixel count sane.
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  const pw=Math.max(1,Math.round(w*dpr)), ph=Math.max(1,Math.round(h*dpr));
+  if(canvas.width!==pw||canvas.height!==ph){ canvas.width=pw; canvas.height=ph; }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {w,h};
+}
+
+function showToast(msg){
+  const t=el('toastMsg'); if(!t) return;
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(showToast._h);
+  showToast._h=setTimeout(()=>{ t.style.opacity='0'; },3200);
+}
+
+// ---------- Palette ----------
+function buildPalette(){
+  const wrap=el('palette');
+  wrap.innerHTML='<h3>Parts</h3>';
+  PART_LIST.forEach(p=>{
+    const card=document.createElement('div');
+    card.className='part-card'+(p.id===selectedPartId?' selected':'');
+    let statsHtml=`${p.w}×${p.h} cells &nbsp;·&nbsp; mass ${p.dryMass}`;
+    if(p.type==='tank') statsHtml+=`<br>fuel capacity ${p.fuel}`;
+    if(p.type==='engine') statsHtml+=`<br>thrust ${p.thrust.toLocaleString()} &nbsp;·&nbsp; burn ${p.fuelRate}/s`;
+    if(p.type==='chute') statsHtml+=`<br>deploy in flight to boost atmospheric braking`;
+    if(p.type==='separator') statsHtml+=`<br>activate in flight to split the rocket in two`;
+    if(p.type==='dock') statsHtml+=`<br>yellow arrow = connecting side &nbsp;·&nbsp; press R to rotate &nbsp;·&nbsp; snaps two ships together when the arrows meet face to face`;
+    if(p.type==='rcs') statsHtml+=`<br>WASD strafe thrust &nbsp;·&nbsp; thrust ${p.thrust.toLocaleString()}`;
+    if(p.type==='wheel') statsHtml+=`<br>A/D drive while landed`;
+    if(p.type==='cone') statsHtml+=`<br>reduces air drag when mounted on a tank`;
+    card.innerHTML=`<div class="pname"><span class="swatch" style="background:${p.color}"></span>${p.name}</div>
+      <div class="pstats">${statsHtml}</div>`;
+    card.onclick=()=>{ selectedPartId=p.id; buildPalette(); };
+    wrap.appendChild(card);
+  });
+}
+buildPalette();
+
+// ---------- Grid camera ----------
+function gridOrigin(CW,CH){
+  const cellPx=BASE_CELL*gridCam.zoom;
+  return {cellPx, ox:CW/2-gridCam.x*cellPx, oy:CH/2-gridCam.y*cellPx};
+}
+function clampGridCam(){
+  const m=14;
+  gridCam.x=Math.max(-m,Math.min(COLS+m,gridCam.x));
+  gridCam.y=Math.max(-m,Math.min(ROWS+m,gridCam.y));
+  gridCam.zoom=Math.max(GRID_MIN_ZOOM,Math.min(GRID_MAX_ZOOM,gridCam.zoom));
+}
+function cellFromEvent(e){
+  const rect=gridCanvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const {cellPx,ox,oy}=gridOrigin(rect.width,rect.height);
+  return {col:Math.floor((mx-ox)/cellPx), row:Math.floor((my-oy)/cellPx)};
+}
+function rectsOverlap(a,b){
+  return a.col<b.col+b.w && a.col+a.w>b.col && a.row<b.row+b.h && a.row+a.h>b.row;
+}
+// Rotation (0/90/180/270, clockwise, on-screen) swaps the effective grid
+// footprint w<->h at odd multiples of 90 — a 2x1 part rotated 90 becomes 1x2.
+function effDims(partDefId,rot){
+  const d=PARTS[partDefId];
+  return ((rot||0)%180===0) ? {w:d.w,h:d.h} : {w:d.h,h:d.w};
+}
+function partRot(pp){ return pp.rot||0; }
+function partFootprint(partDefId,col,row,rot){
+  const eff=effDims(partDefId,rot);
+  return {col,row,w:eff.w,h:eff.h};
+}
+function placedFootprint(pp){
+  return partFootprint(pp.id,pp.col,pp.row,partRot(pp));
+}
+// True if any part in `parts` overlaps the 1-row horizontal band [row,row+1) across [col,col+w)
+function bandOccupied(parts,col,w,row){
+  return parts.some(pp=>{
+    const fp=placedFootprint(pp);
+    return col<fp.col+fp.w && col+w>fp.col && row<fp.row+fp.h && row+1>fp.row;
+  });
+}
+// True if any part in `parts` overlaps the 1-column vertical band [col,col+1) across [row,row+h)
+function bandOccupiedCol(parts,row,h,col){
+  return parts.some(pp=>{
+    const fp=placedFootprint(pp);
+    return row<fp.row+fp.h && row+h>fp.row && col<fp.col+fp.w && col+1>fp.col;
+  });
+}
+// Direction codes match rotation degrees: 0=up, 90=right, 180=down, 270=left.
+// True if hull (any placed part) touches the given footprint on that side.
+function dirHullAdjacent(parts,col,row,w,h,dir){
+  switch(((dir%360)+360)%360){
+    case 0:   return bandOccupied(parts,col,w,row-1);     // hull above
+    case 180: return bandOccupied(parts,col,w,row+h);     // hull below
+    case 90:  return bandOccupiedCol(parts,row,h,col+w);  // hull to the right
+    case 270: return bandOccupiedCol(parts,row,h,col-1);  // hull to the left
+    default:  return false;
+  }
+}
+function canPlace(partDefId,col,row,rot){
+  rot=rot||0;
+  const d=PARTS[partDefId];
+  const eff=effDims(partDefId,rot);
+  if(col<0||row<0||col+eff.w>COLS||row+eff.h>ROWS) return false;
+  if(d.type==='dock'){
+    // must sit against hull on the mounted side (opposite the arrow/open
+    // side) — the open side must stay clear so it's free to dock with
+    const openDir=rot, mountDir=(rot+180)%360;
+    const mounted=dirHullAdjacent(placedParts,col,row,eff.w,eff.h,mountDir);
+    const openBlocked=dirHullAdjacent(placedParts,col,row,eff.w,eff.h,openDir);
+    if(!mounted||openBlocked) return false;
+  }
+  if(cheats.buildNoclip) return true;
+  const fp=partFootprint(partDefId,col,row,rot);
+  for(const pp of placedParts){
+    if(rectsOverlap(fp,placedFootprint(pp))) return false;
+  }
+  return true;
+}
+
+// ---------- Grid interaction ----------
+gridCanvas.addEventListener('mousedown',e=>{
+  if(e.button===0||e.button===1){
+    if(e.button===1) e.preventDefault();
+    panState={startX:e.clientX,startY:e.clientY,camX:gridCam.x,camY:gridCam.y,moved:false,button:e.button};
+  }
+});
+gridCanvas.addEventListener('mousemove',e=>{
+  if(!panState){ hoverCell=cellFromEvent(e); drawGrid(); }
+});
+gridCanvas.addEventListener('mouseleave',()=>{ if(!panState){ hoverCell=null; drawGrid(); } });
+window.addEventListener('mousemove',e=>{
+  if(!panState) return;
+  const dx=e.clientX-panState.startX, dy=e.clientY-panState.startY;
+  if(!panState.moved && Math.hypot(dx,dy)>5) panState.moved=true;
+  if(panState.moved||panState.button===1){
+    const cellPx=BASE_CELL*gridCam.zoom;
+    gridCam.x=panState.camX-dx/cellPx;
+    gridCam.y=panState.camY-dy/cellPx;
+    clampGridCam(); drawGrid();
+  }
+});
+window.addEventListener('mouseup',e=>{
+  flightMouseDown=false;
+  if(!panState) return;
+  if(!panState.moved && panState.button===0){
+    const {col,row}=cellFromEvent(e);
+    const eff=effDims(selectedPartId,selectedRot);
+    const c=Math.min(Math.max(col,0),COLS-eff.w), r=Math.min(Math.max(row,0),ROWS-eff.h);
+    if(canPlace(selectedPartId,c,r,selectedRot)){
+      placedParts.push({id:selectedPartId,col:c,row:r,uid:partUidCounter++,rot:selectedRot});
+      updateStats();
+    }
+  }
+  panState=null; drawGrid();
+});
+gridCanvas.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  if(mode!=='build') return;
+  const {col,row}=cellFromEvent(e);
+  for(let i=placedParts.length-1;i>=0;i--){
+    const pp=placedParts[i]; const fp=placedFootprint(pp);
+    if(col>=fp.col&&col<fp.col+fp.w&&row>=fp.row&&row<fp.row+fp.h){
+      placedParts.splice(i,1); updateStats(); drawGrid(); break;
+    }
+  }
+});
+// ---------- Rotate (R key): rotates the part under the cursor if one is
+// placed there, otherwise rotates the ghost/preview for the next placement.
+window.addEventListener('keydown',e=>{
+  if(mode!=='build') return;
+  if(e.key.toLowerCase()!=='r') return;
+  const tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(tag==='INPUT'||tag==='TEXTAREA') return;
+  e.preventDefault();
+  if(hoverCell){
+    for(let i=placedParts.length-1;i>=0;i--){
+      const pp=placedParts[i]; const fp=placedFootprint(pp);
+      if(hoverCell.col>=fp.col&&hoverCell.col<fp.col+fp.w&&hoverCell.row>=fp.row&&hoverCell.row<fp.row+fp.h){
+        const newRot=(partRot(pp)+90)%360;
+        const eff=effDims(pp.id,newRot);
+        // re-anchor around the part's center so it rotates in place rather
+        // than pivoting from a corner
+        const oldEff=effDims(pp.id,partRot(pp));
+        const cx=pp.col+oldEff.w/2, cy=pp.row+oldEff.h/2;
+        const newCol=Math.round(cx-eff.w/2), newRow=Math.round(cy-eff.h/2);
+        const others=placedParts.filter(o=>o.uid!==pp.uid);
+        const savedCol=pp.col,savedRow=pp.row,savedRot=pp.rot;
+        pp.col=newCol; pp.row=newRow; pp.rot=newRot;
+        // Validate against every OTHER part (not placedParts, which still
+        // includes this part at its new spot and would false-flag itself)
+        let valid = newCol>=0&&newRow>=0&&newCol+eff.w<=COLS&&newRow+eff.h<=ROWS;
+        if(valid && PARTS[pp.id].type==='dock'){
+          const openDir=newRot, mountDir=(newRot+180)%360;
+          const mounted=dirHullAdjacent(others,newCol,newRow,eff.w,eff.h,mountDir);
+          const openBlocked=dirHullAdjacent(others,newCol,newRow,eff.w,eff.h,openDir);
+          valid = mounted&&!openBlocked;
+        }
+        if(valid && !cheats.buildNoclip){
+          const fp2={col:newCol,row:newRow,w:eff.w,h:eff.h};
+          for(const o of others){ if(rectsOverlap(fp2,placedFootprint(o))){ valid=false; break; } }
+        }
+        if(valid){ updateStats(); }
+        else { pp.col=savedCol; pp.row=savedRow; pp.rot=savedRot; showToast('Can\'t rotate there.'); }
+        drawGrid();
+        return;
+      }
+    }
+  }
+  selectedRot=(selectedRot+90)%360;
+  drawGrid();
+});
+gridCanvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const rect=gridCanvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const beforeCellPx=BASE_CELL*gridCam.zoom;
+  const gx=gridCam.x+(mx-rect.width/2)/beforeCellPx;
+  const gy=gridCam.y+(my-rect.height/2)/beforeCellPx;
+  const factor=e.deltaY>0?1/1.15:1.15;
+  gridCam.zoom=Math.max(GRID_MIN_ZOOM,Math.min(GRID_MAX_ZOOM,gridCam.zoom*factor));
+  const afterCellPx=BASE_CELL*gridCam.zoom;
+  gridCam.x=gx-(mx-rect.width/2)/afterCellPx;
+  gridCam.y=gy-(my-rect.height/2)/afterCellPx;
+  clampGridCam(); drawGrid();
+},{passive:false});
+
+el('gridZoomIn').onclick=()=>{ gridCam.zoom=Math.min(GRID_MAX_ZOOM,gridCam.zoom*1.25); clampGridCam(); drawGrid(); };
+el('gridZoomOut').onclick=()=>{ gridCam.zoom=Math.max(GRID_MIN_ZOOM,gridCam.zoom/1.25); clampGridCam(); drawGrid(); };
+el('gridZoomReset').onclick=()=>{ gridCam.inited=false; gridCam.x=COLS/2; gridCam.y=ROWS/2; drawGrid(); };
+
+function drawGrid(){
+  const {w:CW,h:CH}=fitCanvasToDisplay(gridCanvas,gctx);
+  if(!gridCam.inited){
+    const fitZoom=Math.min((CW*0.82)/(COLS*BASE_CELL),(CH*0.82)/(ROWS*BASE_CELL));
+    gridCam.zoom=Math.max(GRID_MIN_ZOOM,Math.min(GRID_MAX_ZOOM,fitZoom));
+    gridCam.inited=true;
+  }
+  const {cellPx,ox,oy}=gridOrigin(CW,CH);
+  gctx.fillStyle='#141414'; gctx.fillRect(0,0,CW,CH);
+  const gx0=Math.max(0,ox), gx1=Math.min(CW,ox+COLS*cellPx);
+  const gy0=Math.max(0,oy), gy1=Math.min(CH,oy+ROWS*cellPx);
+  gctx.strokeStyle='rgba(255,255,255,0.06)'; gctx.lineWidth=1;
+  for(let c=0;c<=COLS;c++){
+    const sx=ox+c*cellPx; if(sx<-2||sx>CW+2) continue;
+    gctx.beginPath(); gctx.moveTo(sx+0.5,gy0); gctx.lineTo(sx+0.5,gy1); gctx.stroke();
+  }
+  for(let r=0;r<=ROWS;r++){
+    const sy=oy+r*cellPx; if(sy<-2||sy>CH+2) continue;
+    gctx.beginPath(); gctx.moveTo(gx0,sy+0.5); gctx.lineTo(gx1,sy+0.5); gctx.stroke();
+  }
+  gctx.strokeStyle='rgba(255,255,255,0.22)'; gctx.lineWidth=1;
+  gctx.strokeRect(ox+0.5,oy+0.5,COLS*cellPx-1,ROWS*cellPx-1);
+  gctx.strokeStyle='rgba(255,69,0,0.4)'; gctx.setLineDash([5,5]);
+  const midX=ox+(COLS/2)*cellPx;
+  gctx.beginPath(); gctx.moveTo(midX,oy); gctx.lineTo(midX,oy+ROWS*cellPx); gctx.stroke();
+  gctx.setLineDash([]);
+  placedParts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    const rot=partRot(pp);
+    const eff=effDims(pp.id,rot);
+    const x=ox+pp.col*cellPx, y=oy+pp.row*cellPx;
+    const ew=eff.w*cellPx, eh=eff.h*cellPx;
+    const pad=cellPx*0.045;
+    const nw=d.w*cellPx-pad*2, nh=d.h*cellPx-pad*2;
+    drawPartShapeRotated(gctx,d,x+ew/2,y+eh/2,nw,nh,rot);
+  });
+  if(hoverCell&&mode==='build'&&!panState){
+    const d=PARTS[selectedPartId];
+    const eff=effDims(selectedPartId,selectedRot);
+    const c=Math.min(Math.max(hoverCell.col,0),COLS-eff.w), r=Math.min(Math.max(hoverCell.row,0),ROWS-eff.h);
+    const ok=canPlace(selectedPartId,c,r,selectedRot);
+    const x=ox+c*cellPx, y=oy+r*cellPx;
+    const ew=eff.w*cellPx, eh=eff.h*cellPx;
+    gctx.fillStyle=ok?'rgba(255,69,0,0.22)':'rgba(211,47,47,0.28)';
+    gctx.fillRect(x,y,ew,eh);
+    gctx.strokeStyle=ok?'#FF4500':'#D32F2F'; gctx.lineWidth=1.5;
+    gctx.strokeRect(x+0.75,y+0.75,ew-1.5,eh-1.5);
+    const pad=cellPx*0.045;
+    const nw=d.w*cellPx-pad*2, nh=d.h*cellPx-pad*2;
+    drawDirArrow(gctx,x+ew/2,y+eh/2,nw,nh,selectedRot);
+  }
+}
+drawGrid();
+
+function statsFromParts(parts){
+  let dryMass=0,fuel=0,thrust=0,fuelRate=0,pods=0,engines=0,chutes=0,seps=0;
+  parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    dryMass+=d.dryMass; fuel+=d.fuel; thrust+=d.thrust; fuelRate+=d.fuelRate;
+    if(d.type==='pod') pods++;
+    if(d.type==='engine') engines++;
+    if(d.type==='chute') chutes++;
+    if(d.type==='separator') seps++;
+  });
+  return {dryMass,fuel,wetMass:dryMass+fuel,thrust,fuelRate,pods,engines,chutes,seps};
+}
+// True if two placed-part footprints share a grid edge (touch directly).
+function footprintsTouch(a,b){
+  const afp=placedFootprint(a), bfp=placedFootprint(b);
+  const aL=afp.col, aR=afp.col+afp.w, aT=afp.row, aB=afp.row+afp.h;
+  const bL=bfp.col, bR=bfp.col+bfp.w, bT=bfp.row, bB=bfp.row+bfp.h;
+  const colOverlap=aL<bR&&aR>bL, rowOverlap=aT<bB&&aB>bT;
+  const vertTouch=colOverlap&&(aB===bT||bB===aT);
+  const horizTouch=rowOverlap&&(aR===bL||bR===aL);
+  return vertTouch||horizTouch;
+}
+// For each engine, BFS outward through touching parts, but only ever hop
+// through 'tank' parts. Pods, other engines, chutes, and — crucially —
+// separators all act as walls, so cutting a rocket with a separator also
+// cuts the fuel line, giving each stage its own isolated tank pool.
+function computeEngineConnections(parts){
+  const engines=parts.filter(pp=>{const t=PARTS[pp.id].type; return t==='engine'||t==='rcs';});
+  const connections={};
+  engines.forEach(eng=>{
+    // Reference row is the engine's own center — every candidate tank is
+    // checked against THIS, not against whichever part the BFS is currently
+    // on, so a chain can't zigzag below the engine and back up to sneak in
+    // a tank that's actually mounted underneath it (row increases downward;
+    // see shipFootOffset). Tanks at or above the engine (equal-or-smaller
+    // center row) are fair game; anything strictly below is excluded —
+    // fuel doesn't flow "up" past the engine into a tank under it.
+    const engFp=placedFootprint(eng);
+    const engCenterRow=engFp.row+engFp.h/2;
+    const visited=new Set([eng.uid]);
+    const tankUids=[];
+    const queue=[eng];
+    while(queue.length){
+      const cur=queue.shift();
+      parts.forEach(other=>{
+        if(visited.has(other.uid)||PARTS[other.id].type!=='tank') return;
+        if(!footprintsTouch(cur,other)) return;
+        const otherFp=placedFootprint(other);
+        const otherCenterRow=otherFp.row+otherFp.h/2;
+        if(otherCenterRow>engCenterRow) return;
+        visited.add(other.uid);
+        tankUids.push(other.uid);
+        queue.push(other);
+      });
+    }
+    connections[eng.uid]=tankUids;
+  });
+  return connections;
+}
+function computeRocketStats(){
+  const s=statsFromParts(placedParts);
+  const twr=s.wetMass>0?(s.thrust/(s.wetMass*EARTH_SURF_G)):0;
+  const ve=s.fuelRate>0?s.thrust/s.fuelRate:0;
+  const dv=(ve>0&&s.dryMass>0)?ve*Math.log(s.wetMass/s.dryMass):0;
+  return Object.assign({},s,{twr,dv});
+}
+function updateStats(){
+  const s=computeRocketStats();
+  el('s-dry').textContent=s.dryMass.toLocaleString();
+  el('s-fuel').textContent=s.fuel.toLocaleString();
+  el('s-thrust').textContent=s.thrust.toLocaleString();
+  el('s-twr').textContent=s.twr.toFixed(2);
+  el('s-dv').textContent=Math.round(s.dv).toLocaleString()+' u/s';
+  let warn='';
+  if(s.pods===0) warn='Needs a Command Pod.';
+  else if(s.engines===0) warn='Needs at least one Engine.';
+  else if(s.twr<1) warn='TWR < 1 — this rocket cannot lift off!';
+  el('s-warn').textContent=warn;
+  el('launchBtn').disabled=!(s.pods>0&&s.engines>0&&s.twr>=1);
+}
+updateStats();
+el('clearBtn').onclick=()=>{ placedParts=[]; updateStats(); drawGrid(); };
+el('cheatNoclip').onchange=e=>{ cheats.buildNoclip=e.target.checked; drawGrid(); };
+el('cheatBigGrid').onchange=e=>{
+  cheats.buildBigGrid=e.target.checked;
+  COLS=cheats.buildBigGrid?64:24; ROWS=cheats.buildBigGrid?96:75;
+  gridCam.inited=false;
+  drawGrid();
+};
+
+// ============================================================
+// SHIPS
+// ============================================================
+const SAVE_KEY = 'sfs_ships_v3'; // localStorage key; bump the suffix if the save schema changes
+let ships = [];
+let activeShipIdx = -1;
+let warp = 1;
+// Set true whenever the ship roster or a ship's status actually changes.
+// loop() only calls renderShipList() when this is set, then clears it —
+// rebuilding the list (and its delete/switch buttons) unconditionally every
+// frame was destroying and recreating those button DOM nodes ~60x/sec,
+// which silently ate most clicks (the node under the cursor at mousedown
+// was gone by mouseup, so the browser never fires 'click').
+let shipListDirty = true;
+// camera.angle lets the view rotate to track the active ship's heading (see cheats.camRotate)
+let camera = {x:EARTH.distance, y:0, metersPerPixel:0.5, angle:0};
+function activeShip(){ return activeShipIdx>=0&&ships[activeShipIdx]?ships[activeShipIdx]:null; }
+
+function buildSprite(parts){
+  let minC=Infinity,minR=Infinity,maxC=-Infinity,maxR=-Infinity;
+  parts.forEach(pp=>{
+    const eff=effDims(pp.id,partRot(pp));
+    minC=Math.min(minC,pp.col); minR=Math.min(minR,pp.row);
+    maxC=Math.max(maxC,pp.col+eff.w); maxR=Math.max(maxR,pp.row+eff.h);
+  });
+  const cellsW=maxC-minC, cellsH=maxR-minR;
+  const cnv=document.createElement('canvas');
+  cnv.width=Math.max(1,cellsW*SPRITE_RASTER_CELL);
+  cnv.height=Math.max(1,cellsH*SPRITE_RASTER_CELL);
+  const ctx=cnv.getContext('2d');
+  ctx.imageSmoothingEnabled=true;
+  if('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality='high';
+  let comXc=0,comYc=0,totalM=0;
+  parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    const rot=partRot(pp);
+    const eff=effDims(pp.id,rot);
+    const cx=(pp.col-minC+eff.w/2)*SPRITE_RASTER_CELL, cy=(pp.row-minR+eff.h/2)*SPRITE_RASTER_CELL;
+    const pad=SPRITE_RASTER_CELL*0.06;
+    const nw=d.w*SPRITE_RASTER_CELL-pad*2, nh=d.h*SPRITE_RASTER_CELL-pad*2;
+    drawPartShapeRotated(ctx,d,cx,cy,nw,nh,rot);
+    const m=d.dryMass+d.fuel;
+    comXc+=(pp.col-minC+eff.w/2)*m; comYc+=(pp.row-minR+eff.h/2)*m; totalM+=m;
+  });
+  if(totalM>0){ comXc/=totalM; comYc/=totalM; } else { comXc=cellsW/2; comYc=cellsH/2; }
+  return {canvas:cnv, cellsW, cellsH, comXc, comYc};
+}
+function shipFootOffset(ship){
+  return (ship.sprite.cellsH-ship.sprite.comYc)*CELL_WORLD;
+}
+function recomputeShipFromParts(ship){
+  const s=statsFromParts(ship.parts);
+  ship.dryMass=s.dryMass; ship.fuelCap=s.fuel;
+  ship.thrust=s.thrust; ship.fuelRate=s.fuelRate;
+  ship.sprite=ship.parts.length?buildSprite(ship.parts):ship.sprite;
+  // Drop per-part state for anything just jettisoned, then reroute fuel
+  // connections for the surviving layout (a stage separation can isolate
+  // tanks that used to be reachable through the discarded parts).
+  const keepUids=new Set(ship.parts.map(pp=>String(pp.uid)));
+  Object.keys(ship.tankFuel).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.tankFuel[uid]; });
+  Object.keys(ship.engineEnabled).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.engineEnabled[uid]; });
+  ship.engineConnections=computeEngineConnections(ship.parts);
+  ship.fuel=Object.values(ship.tankFuel).reduce((a,b)=>a+b,0);
+  if(s.engines===0) ship.engineOn=false;
+  if(s.chutes===0) ship.chuteDeployed=false;
+}
+
+function shipCollisionRadius(sh){
+  return Math.max(sh.sprite.cellsW,sh.sprite.cellsH)*CELL_WORLD*0.5;
+}
+function hasDockPort(sh){
+  return sh.parts.some(pp=>PARTS[pp.id].type==='dock');
+}
+// A dock's rotation (0/90/180/270) IS its open/connecting direction by
+// convention — rot 0 = open side up, matching the arrow drawn in the
+// builder. Old saves predate the rot field, so default to 0 (open up),
+// same as the game's previous fixed behavior.
+function dockDir(dockPart){ return partRot(dockPart); }
+// World-space unit vector a local direction (deg, 0=up/90=right/180=down/
+// 270=left in the ship's own unrotated grid) points to once the ship is
+// rotated to its current flight angle. Uses the same sin/cos convention as
+// the engine-thrust code above (fwd = sin(angle), cos(angle) at dir=0).
+function worldDirFromLocal(shipAngle,localDeg){
+  const rad=(shipAngle||0)+localDeg*Math.PI/180;
+  return {x:Math.sin(rad), y:Math.cos(rad)};
+}
+// Rotate a grid point by a multiple of 90° (clockwise on screen) around a
+// pivot point. Used to re-orient an entire incoming ship's parts so its
+// dock port ends up facing the target port when the two ships merge.
+function rotateGridPoint(col,row,pivotCol,pivotRow,deltaDeg){
+  let dx=col-pivotCol, dy=row-pivotRow;
+  const steps=(((deltaDeg%360)+360)%360)/90;
+  for(let i=0;i<steps;i++){ const ndx=-dy, ndy=dx; dx=ndx; dy=ndy; }
+  return {col:pivotCol+dx, row:pivotRow+dy};
+}
+// Merges ship b into ship a at their dock ports — opposite of activateSeparator.
+// dirA/dirB are the ports' open directions (deg) in each ship's own local grid.
+function mergeShips(a,dockA,b,dockB){
+  const dirA=dockDir(dockA), dirB=dockDir(dockB);
+  const fpA=placedFootprint(dockA);
+  // Rotate all of ship b's parts (in b's local grid) so dockB ends up facing
+  // exactly opposite dockA (i.e. the two ports face each other once fused).
+  const delta=(((dirA+180)-dirB)%360+360)%360;
+  const fpBraw=placedFootprint(dockB);
+  const pivot={col:fpBraw.col+fpBraw.w/2, row:fpBraw.row+fpBraw.h/2};
+  // Re-derive dockB's rotated footprint from its rotated center/dims so the
+  // adjacency offset below lines up exactly with where b's parts will land.
+  const dockBNewRot=(dirB+delta)%360;
+  const dockBEff=effDims(dockB.id,dockBNewRot);
+  // dockB's center is unmoved by its own pivot rotation — only its
+  // effective w/h (and therefore its top-left corner) can change
+  const dockBNewCol=Math.round(pivot.col-dockBEff.w/2);
+  const dockBNewRow=Math.round(pivot.row-dockBEff.h/2);
+  // Offset to slide the (already-rotated) b assembly so its port sits flush
+  // against a's port, on the side a's port opens toward.
+  let colOff=0, rowOff=0;
+  switch(dirA){
+    case 0:   colOff=fpA.col-dockBNewCol;              rowOff=fpA.row-(dockBNewRow+dockBEff.h); break; // b above a
+    case 180: colOff=fpA.col-dockBNewCol;              rowOff=(fpA.row+fpA.h)-dockBNewRow;       break; // b below a
+    case 90:  rowOff=fpA.row-dockBNewRow;              colOff=(fpA.col+fpA.w)-dockBNewCol;       break; // b right of a
+    case 270: rowOff=fpA.row-dockBNewRow;              colOff=fpA.col-(dockBNewCol+dockBEff.w);  break; // b left of a
+  }
+  const mA=a.dryMass+a.fuel, mB=b.dryMass+b.fuel;
+  b.parts.forEach(pp=>{
+    const newUid=partUidCounter++;
+    if(b.tankFuel[pp.uid]!==undefined) a.tankFuel[newUid]=b.tankFuel[pp.uid];
+    if(b.engineEnabled[pp.uid]!==undefined) a.engineEnabled[newUid]=b.engineEnabled[pp.uid];
+    const oldEff=effDims(pp.id,partRot(pp));
+    const center={col:pp.col+oldEff.w/2, row:pp.row+oldEff.h/2};
+    const rotCenter=rotateGridPoint(center.col,center.row,pivot.col,pivot.row,delta);
+    const newRot=(partRot(pp)+delta)%360;
+    const newEff=effDims(pp.id,newRot);
+    const newCol=Math.round(rotCenter.col-newEff.w/2)+colOff;
+    const newRow=Math.round(rotCenter.row-newEff.h/2)+rowOff;
+    a.parts.push({id:pp.id,col:newCol,row:newRow,uid:newUid,rot:newRot});
+  });
+  a.vel.x=(a.vel.x*mA+b.vel.x*mB)/(mA+mB);
+  a.vel.y=(a.vel.y*mA+b.vel.y*mB)/(mA+mB);
+  a.pos.x=(a.pos.x*mA+b.pos.x*mB)/(mA+mB);
+  a.pos.y=(a.pos.y*mA+b.pos.y*mB)/(mA+mB);
+  a.name=a.name+' + '+b.name;
+  recomputeShipFromParts(a);
+  const bIdx=ships.indexOf(b);
+  ships.splice(bIdx,1);
+  if(activeShipIdx===bIdx) activeShipIdx=ships.indexOf(a);
+  else if(activeShipIdx>bIdx) activeShipIdx--;
+  shipListDirty=true;
+  showToast(a.name+' docked.');
+  updateEngineBtn(); updateChuteBtn(); renderStagingList(); renderFuelList();
+  saveShips();
+}
+// Skipped above 1x warp to avoid an O(n^2) check every substep at high timewarp.
+function handleShipCollisions(){
+  if(warp>1) return;
+  for(let i=0;i<ships.length;i++){
+    const a=ships[i]; if(a.status!=='flying'||a._pendingRemoval) continue;
+    for(let j=i+1;j<ships.length;j++){
+      const b=ships[j]; if(b.status!=='flying'||b._pendingRemoval) continue;
+      const dx=b.pos.x-a.pos.x, dy=b.pos.y-a.pos.y;
+      const dist=Math.hypot(dx,dy)||0.0001;
+      if(hasDockPort(a)&&hasDockPort(b)&&dist<DOCK_SNAP_RADIUS){
+        const docksA=a.parts.filter(pp=>PARTS[pp.id].type==='dock');
+        const docksB=b.parts.filter(pp=>PARTS[pp.id].type==='dock');
+        const relN={x:dx/dist,y:dy/dist};
+        let merged=false;
+        outer:
+        for(const dockA of docksA){
+          for(const dockB of docksB){
+            const wA=worldDirFromLocal(a.angle,dockDir(dockA));
+            const wB=worldDirFromLocal(b.angle,dockDir(dockB));
+            // Ports must face each other (opposite world directions), not
+            // the same way or back-to-back — this is what stops two ships
+            // that happen to be near each other, but not actually lined up
+            // port-to-port, from fusing in the wrong direction.
+            const facingDot=wA.x*wB.x+wA.y*wB.y;
+            if(facingDot>-0.85) continue;
+            // B must actually sit in the direction A's port opens toward
+            // (not to the side or behind it) — this is what stops ships
+            // that drift past each other sideways from clipping together.
+            const alignDot=relN.x*wA.x+relN.y*wA.y;
+            if(alignDot<0.85) continue;
+            mergeShips(a,dockA,b,dockB);
+            merged=true;
+            break outer;
+          }
+        }
+        if(merged) return;
+      }
+      const minDist=shipCollisionRadius(a)+shipCollisionRadius(b);
+      if(dist>=minDist) continue;
+      const relSpeed=Math.hypot(a.vel.x-b.vel.x,a.vel.y-b.vel.y);
+      if(relSpeed>SHIP_COLLIDE_SAFE_SPEED){
+        destroyShip(a,a.name+' collided with '+b.name+' at '+relSpeed.toFixed(0)+' u/s.');
+        destroyShip(b,b.name+' collided with '+a.name+' at '+relSpeed.toFixed(0)+' u/s.');
+      } else {
+        // gentle bump — push apart so they can't sit inside each other
+        const nx=dx/dist, ny=dy/dist, overlap=minDist-dist;
+        a.pos.x-=nx*overlap/2; a.pos.y-=ny*overlap/2;
+        b.pos.x+=nx*overlap/2; b.pos.y+=ny*overlap/2;
+      }
+    }
+  }
+}
+
+let shipCounter=0;
+function launch(){
+  const stats=computeRocketStats();
+  const parts=placedParts.map(pp=>({id:pp.id,col:pp.col,row:pp.row,uid:pp.uid,rot:pp.rot||0}));
+  const sprite=buildSprite(parts);
+  const prev=activeShip();
+  if(prev) prev.engineOn=false;
+  shipCounter++;
+  const earthPos=planetPositionAt(EARTH,simTime);
+  const earthVel={
+    x:-EARTH.omega*earthPos.y,
+    y: EARTH.omega*earthPos.x,
+  };
+  const earthDist=Math.hypot(earthPos.x,earthPos.y)||EARTH.distance;
+  const earthNx=earthPos.x/earthDist;
+  const earthNy=earthPos.y/earthDist;
+  const PAD_H=LAUNCH_PAD_HEIGHT;
+  // Each tank starts full and tracks its own fuel; each engine starts enabled
+  // and only drains the tank(s) it's physically connected to (see
+  // computeEngineConnections) — this is what makes staged, multi-tank
+  // rockets behave correctly.
+  const tankFuel={};
+  parts.forEach(pp=>{ if(PARTS[pp.id].type==='tank') tankFuel[pp.uid]=PARTS[pp.id].fuel; });
+  const engineEnabled={};
+  parts.forEach(pp=>{ if(PARTS[pp.id].type==='engine') engineEnabled[pp.uid]=true; });
+  const engineConnections=computeEngineConnections(parts);
+  const ship={
+    id:'ship-'+shipCounter, name:'Ship '+shipCounter,
+    parts, sprite,
+    pos:{x:earthPos.x+earthNx*EARTH.radius, y:earthPos.y+earthNy*EARTH.radius},
+    vel:{x:earthVel.x, y:earthVel.y},
+    angle:Math.atan2(earthNx,earthNy),
+    dryMass:stats.dryMass, fuel:stats.fuel, fuelCap:stats.fuel,
+    thrust:stats.thrust, fuelRate:stats.fuelRate,
+    tankFuel, engineEnabled, engineConnections,
+    engineOn:false, throttle:1, chuteDeployed:false,
+    status:'landed', statusMsg:'Ready for launch on Earth.',
+    trail:makeTrail(), lastTrailPos:null, _inAtmo:true, _domBody:EARTH,
+    landedOnPlanet:EARTH,
+  };
+  const foot=shipFootOffset(ship);
+  const groundR=EARTH.radius+PAD_H+foot;
+  ship.pos.x=earthPos.x+earthNx*groundR;
+  ship.pos.y=earthPos.y+earthNy*groundR;
+  ship.landedRelPos={x:earthNx*groundR, y:earthNy*groundR};
+  ships.push(ship);
+  activeShipIdx=ships.length-1;
+  camera.x=ship.pos.x; camera.y=ship.pos.y;
+  camera.metersPerPixel=0.5; camera.angle=0;
+  el('buildScreen').classList.remove('active');
+  el('flightScreen').classList.add('active');
+  el('toBuildBtn').style.display='inline-block';
+  mode='flight';
+  el('throttleSlider').value=100; hud.throttle.textContent='100%';
+  setWarp(1); updateEngineBtn(); updateChuteBtn();
+  renderShipList(); renderStagingList(); renderFuelList(); saveShips();
+}
+el('launchBtn').onclick=launch;
+
+el('toBuildBtn').onclick=()=>{
+  el('flightScreen').classList.remove('active');
+  el('buildScreen').classList.add('active');
+  el('toBuildBtn').style.display='none';
+  mode='build'; drawGrid();
+};
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function saveShips(){
+  try{
+    const data=ships
+      .filter(s=>s.status==='flying')
+      .map(s=>({
+        id:s.id, name:s.name, parts:s.parts,
+        pos:s.pos, vel:s.vel, angle:s.angle,
+        dryMass:s.dryMass, fuel:s.fuel, fuelCap:s.fuelCap,
+        thrust:s.thrust, fuelRate:s.fuelRate,
+        tankFuel:s.tankFuel, engineEnabled:s.engineEnabled,
+        throttle:s.throttle, chuteDeployed:s.chuteDeployed,
+        status:s.status,
+      }));
+    localStorage.setItem(SAVE_KEY,JSON.stringify({simTime,shipCounter,ships:data}));
+  }catch(err){}
+}
+function loadShips(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw) return false;
+    const data=JSON.parse(raw);
+    if(!data||!Array.isArray(data.ships)||!data.ships.length) return false;
+    simTime=typeof data.simTime==='number'?data.simTime:0;
+    shipCounter=typeof data.shipCounter==='number'?data.shipCounter:data.ships.length;
+    ships=data.ships.map(s=>{
+      const parts=Array.isArray(s.parts)&&s.parts.length?s.parts:[{id:'pod',col:0,row:0,uid:partUidCounter++}];
+      parts.forEach(pp=>{ if(pp.uid===undefined) pp.uid=partUidCounter++; });
+      partUidCounter=Math.max(partUidCounter,...parts.map(pp=>pp.uid+1));
+      const sprite=buildSprite(parts);
+      const tankFuel=s.tankFuel||{};
+      const engineEnabled=s.engineEnabled||{};
+      parts.forEach(pp=>{
+        if(PARTS[pp.id].type==='tank'&&!(pp.uid in tankFuel)) tankFuel[pp.uid]=PARTS[pp.id].fuel;
+        if(PARTS[pp.id].type==='engine'&&!(pp.uid in engineEnabled)) engineEnabled[pp.uid]=true;
+      });
+      return {
+        id:s.id, name:s.name, parts, sprite,
+        pos:s.pos, vel:s.vel, angle:s.angle||0,
+        dryMass:s.dryMass, fuel:Object.values(tankFuel).reduce((a,b)=>a+b,0), fuelCap:s.fuelCap,
+        thrust:s.thrust, fuelRate:s.fuelRate,
+        tankFuel, engineEnabled, engineConnections:computeEngineConnections(parts),
+        engineOn:false, throttle:typeof s.throttle==='number'?s.throttle:1,
+        chuteDeployed:!!s.chuteDeployed,
+        status:'flying', statusMsg:'',
+        trail:makeTrail(), lastTrailPos:null, _inAtmo:false, _domBody:null,
+      };
+    });
+    return true;
+  }catch(err){ return false; }
+}
+
+// Saved rocket designs (build mode) — same localStorage-backed pattern as
+// the flying-ship save above, just keyed separately and storing layouts
+// instead of live flight state.
+const SAVE_ROCKETS_KEY = 'sfs_rockets_v1';
+function saveRocketDesigns(){
+  try{ localStorage.setItem(SAVE_ROCKETS_KEY, JSON.stringify(savedRockets)); }catch(err){}
+}
+function loadRocketDesigns(){
+  try{
+    const raw=localStorage.getItem(SAVE_ROCKETS_KEY);
+    if(!raw) return [];
+    const data=JSON.parse(raw);
+    return Array.isArray(data)?data:[];
+  }catch(err){ return []; }
+}
+let savedRockets = loadRocketDesigns();
+function renderSavedRocketsList(){
+  const wrap=el('savedRocketsList');
+  if(!savedRockets.length){
+    wrap.innerHTML='<div style="font-size:10.5px;color:#777;">No saved rockets yet.</div>';
+    return;
+  }
+  wrap.innerHTML='';
+  savedRockets.forEach((r,i)=>{
+    const row=document.createElement('div');
+    row.className='saved-rocket-row';
+    row.innerHTML=`<span class="rocket-name">${r.name}</span>`;
+    const loadBtn=document.createElement('button');
+    loadBtn.className='btn small'; loadBtn.textContent='Load';
+    loadBtn.onclick=()=>loadRocketDesign(i);
+    const delBtn=document.createElement('button');
+    delBtn.className='btn small danger'; delBtn.textContent='✕';
+    delBtn.title='Delete '+r.name;
+    delBtn.onclick=()=>{
+      savedRockets.splice(i,1);
+      saveRocketDesigns(); renderSavedRocketsList();
+    };
+    row.appendChild(loadBtn); row.appendChild(delBtn);
+    wrap.appendChild(row);
+  });
+}
+function loadRocketDesign(i){
+  const r=savedRockets[i]; if(!r) return;
+  placedParts=r.parts.map(pp=>({id:pp.id,col:pp.col,row:pp.row,uid:partUidCounter++,rot:pp.rot||0}));
+  updateStats(); drawGrid();
+  showToast('Loaded rocket "'+r.name+'".');
+}
+el('saveRocketBtn').onclick=()=>{
+  if(!placedParts.length){ showToast('Nothing to save — place some parts first.'); return; }
+  const name=prompt('Name this rocket design:','Rocket '+(savedRockets.length+1));
+  if(!name) return;
+  const parts=placedParts.map(pp=>({id:pp.id,col:pp.col,row:pp.row,rot:pp.rot||0}));
+  savedRockets.push({name,parts});
+  saveRocketDesigns(); renderSavedRocketsList();
+  showToast('Saved rocket "'+name+'".');
+};
+renderSavedRocketsList();
+
+// ---------- Warp ----------
+function buildWarpButtons(){
+  const g=el('warpGroup');
+  g.innerHTML='<span class="ctl-label">Warp</span>';
+  WARP_LEVELS.forEach(w=>{
+    const b=document.createElement('button');
+    b.className='warp-btn'+(w===warp?' active':'');
+    b.textContent=formatWarpLabel(w);
+    b.dataset.w=w;
+    b.onclick=()=>setWarp(w);
+    g.appendChild(b);
+  });
+}
+// Shared by the warp buttons and the telemetry readout so both always agree.
+function formatWarpLabel(w){
+  if(w>=1000000) return (w/1000000)+'M×';
+  if(w>=1000) return (w/1000)+'k×';
+  return w+'×';
+}
+buildWarpButtons();
+function setWarp(w){
+  warp=w;
+  const sh=activeShip();
+  if(w>1&&sh){ sh.engineOn=false; updateEngineBtn(); }
+  document.querySelectorAll('.warp-btn').forEach(b=>{
+    b.classList.toggle('active',parseFloat(b.dataset.w)===w);
+  });
+  hud.warp.textContent=formatWarpLabel(w);
+}
+function computeMaxAllowedWarp(){
+  let inAtmoAny=false;
+  ships.forEach(s=>{
+    if(s.status==='landed') return; // landed ships don't restrict warp
+    if(s.status!=='flying') return;
+    if(s._inAtmo) inAtmoAny=true;
+  });
+  if(inAtmoAny) return 5; // allow up to 5× warp inside atmospheres
+  return WARP_LEVELS[WARP_LEVELS.length-1];
+}
+function largestAllowedLevel(maxAllowed){
+  let best=1;
+  WARP_LEVELS.forEach(w=>{ if(w<=maxAllowed) best=w; });
+  return best;
+}
+function updateWarpButtonsUI(maxAllowed, minAllowed){
+  minAllowed=minAllowed||1;
+  document.querySelectorAll('.warp-btn').forEach(b=>{
+    const w=parseFloat(b.dataset.w);
+    const disabled=w>maxAllowed||w<minAllowed;
+    b.disabled=disabled;
+    b.title=!disabled?''
+      :(w>maxAllowed?'Unavailable inside a planet\u2019s atmosphere'
+                    :'Locked while Nav Beacon is flying the planned path');
+  });
+}
+function updateZoomButtons(){
+  const sh=activeShip();
+  const inAtmo=sh&&sh._inAtmo;
+  document.querySelectorAll('.zbtn').forEach(b=>{
+    const z=parseFloat(b.dataset.z);
+    const blocked=inAtmo&&z>ATMO_ZOOM_MAX_MPP;
+    b.disabled=blocked;
+    b.title=blocked?'Not available inside atmosphere':'';
+  });
+}
+
+// ---------- Engine / throttle / chute ----------
+function updateEngineBtn(){
+  const b=el('engineToggle');
+  const sh=activeShip();
+  if(!sh){ b.disabled=true; b.textContent='ENGINE: OFF'; b.classList.remove('on'); return; }
+  const canFire=sh.status==='flying'||sh.status==='landed';
+  b.disabled=!canFire;
+  // When on the pad show "LAUNCH ▲" so the player knows what pressing it does
+  if(sh.status==='landed'){
+    b.textContent='LAUNCH ▲';
+    b.classList.remove('on');
+  } else {
+    b.textContent='ENGINE: '+(sh.engineOn?'ON':'OFF');
+    b.classList.toggle('on',sh.engineOn);
+  }
+}
+el('engineToggle').onclick=()=>{
+  const sh=activeShip();
+  if(!sh) return;
+  if(sh.status==='landed'){
+    // Lift off — transition ship to flying with engine on
+    sh.status='flying';
+    sh.statusMsg='';
+    sh.landedRelPos=null;
+    sh.landedOnPlanet=null;
+    sh._inAtmo=true; // still on surface, physics will sort it out
+    sh.engineOn=true;
+    if(warp>1) setWarp(1);
+    updateEngineBtn(); updateChuteBtn(); renderStagingList(); renderFuelList();
+    return;
+  }
+  if(sh.status!=='flying') return;
+  if(warp>1) setWarp(1);
+  sh.engineOn=!sh.engineOn; updateEngineBtn();
+};
+function updateChuteBtn(){
+  const b=el('chuteToggle');
+  const sh=activeShip();
+  const hasChute=sh&&sh.parts.some(pp=>PARTS[pp.id].type==='chute');
+  b.style.display=hasChute?'inline-block':'none';
+  if(!sh) return;
+  b.disabled=sh.status!=='flying';
+  b.textContent='CHUTE: '+(sh.chuteDeployed?'DEPLOYED':'STOWED');
+  b.classList.toggle('on',sh.chuteDeployed);
+}
+el('chuteToggle').onclick=()=>{
+  const sh=activeShip();
+  if(!sh||sh.status!=='flying') return;
+  sh.chuteDeployed=!sh.chuteDeployed; updateChuteBtn();
+};
+el('throttleSlider').oninput=e=>{
+  const sh=activeShip(); if(!sh) return;
+  sh.throttle=parseInt(e.target.value)/100;
+  hud.throttle.textContent=e.target.value+'%';
+};
+
+// ---------- Cheats ----------
+el('cheatInfiniteFuel').onchange=e=>{ cheats.infiniteFuel=e.target.checked; };
+el('cheatMousePull').onchange=e=>{ cheats.mousePull=e.target.checked; };
+el('cheatCamRotate').onchange=e=>{
+  cheats.camRotate=e.target.checked;
+  if(!e.target.checked) camera.angle=0;
+};
+el('cheatNavBeacon').onchange=e=>{
+  cheats.navBeacon=e.target.checked;
+  if(!e.target.checked){
+    navBeaconPath=[]; navTargetPlanet=null; navDeltaV=null; navBurnWarpDropped=false; navBurnTargetVel=null; navPlanCoastPath=[]; navBurnDone=false; navPostBurnCoastPath=[];
+    el('navArrowPanel').style.display='none';
+    hidePlanetCtxMenu();
+  }
+};
+el('cheatTypeEdit').onchange=e=>{
+  cheats.typeEdit=e.target.checked;
+  el('typeEditPanel').style.display=cheats.typeEdit?'block':'none';
+  if(cheats.typeEdit) populateTypeEditInputs();
+  positionShipList();
+};
+
+// ---------- TypeEdit: read the current ship/telemetry state into the inputs ----------
+function populateTypeEditInputs(){
+  const sh=activeShip();
+  if(!sh){ ['te-speed','te-alt','te-fuel','te-throttle'].forEach(id=>el(id).value=''); el('te-warp').value=warp; return; }
+  let speed,alt;
+  if(sh._domBody){
+    const ppos=planetPositionAt(sh._domBody,simTime);
+    const pVx=-sh._domBody.omega*ppos.y, pVy=sh._domBody.omega*ppos.x;
+    speed=Math.hypot(sh.vel.x-pVx,sh.vel.y-pVy);
+    alt=Math.hypot(sh.pos.x-ppos.x,sh.pos.y-ppos.y)-sh._domBody.radius;
+  } else {
+    speed=Math.hypot(sh.vel.x,sh.vel.y);
+    alt=Math.hypot(sh.pos.x-SUN_POS.x,sh.pos.y-SUN_POS.y)-SUN_RADIUS;
+  }
+  el('te-speed').value=speed.toFixed(1);
+  el('te-alt').value=Math.round(alt);
+  el('te-fuel').value=sh.fuelCap?Math.round(100*sh.fuel/sh.fuelCap):0;
+  el('te-throttle').value=Math.round(sh.throttle*100);
+  el('te-warp').value=warp;
+}
+
+// ---------- TypeEdit: apply a typed value back onto the active ship ----------
+function teApplySpeed(val){
+  const sh=activeShip(); const v=parseFloat(val);
+  if(!sh||!isFinite(v)||v<0) return;
+  let refVx=0, refVy=0;
+  if(sh._domBody){
+    const ppos=planetPositionAt(sh._domBody,simTime);
+    refVx=-sh._domBody.omega*ppos.y; refVy=sh._domBody.omega*ppos.x;
+  }
+  let rvx=sh.vel.x-refVx, rvy=sh.vel.y-refVy;
+  let mag=Math.hypot(rvx,rvy);
+  if(mag<1e-6){ rvx=Math.sin(sh.angle); rvy=Math.cos(sh.angle); mag=1; } // no direction to scale — use ship heading
+  const scale=v/mag;
+  sh.vel.x=refVx+rvx*scale; sh.vel.y=refVy+rvy*scale;
+}
+function teApplyAltitude(val){
+  const sh=activeShip(); const v=parseFloat(val);
+  if(!sh||!isFinite(v)) return;
+  const centerPos=sh._domBody?planetPositionAt(sh._domBody,simTime):SUN_POS;
+  const surfaceR=sh._domBody?sh._domBody.radius:SUN_RADIUS;
+  let dx=sh.pos.x-centerPos.x, dy=sh.pos.y-centerPos.y;
+  const dist=Math.hypot(dx,dy)||1;
+  const nx=dx/dist, ny=dy/dist;
+  const newDist=surfaceR+Math.max(0,v);
+  sh.pos.x=centerPos.x+nx*newDist; sh.pos.y=centerPos.y+ny*newDist;
+  if(sh.status==='landed'){
+    sh.status='flying'; sh.statusMsg=''; sh.landedOnPlanet=null; sh.landedRelPos=null;
+    updateEngineBtn();
+  }
+}
+function teApplyFuel(val){
+  const sh=activeShip(); let pct=parseFloat(val);
+  if(!sh||!isFinite(pct)) return;
+  pct=Math.max(0,Math.min(100,pct))/100;
+  sh.parts.forEach(pp=>{ if(PARTS[pp.id].type==='tank') sh.tankFuel[pp.uid]=PARTS[pp.id].fuel*pct; });
+  sh.fuel=Object.values(sh.tankFuel).reduce((a,b)=>a+b,0);
+  renderFuelList();
+}
+function teApplyThrottle(val){
+  const sh=activeShip(); let pct=parseFloat(val);
+  if(!sh||!isFinite(pct)) return;
+  pct=Math.max(0,Math.min(100,pct));
+  sh.throttle=pct/100;
+  el('throttleSlider').value=Math.round(pct);
+  hud.throttle.textContent=Math.round(pct)+'%';
+}
+function teApplyWarp(val){
+  const v=parseFloat(val);
+  if(isFinite(v)&&v>0) setWarp(v);
+}
+el('te-speed').onchange=e=>teApplySpeed(e.target.value);
+el('te-alt').onchange=e=>teApplyAltitude(e.target.value);
+el('te-fuel').onchange=e=>teApplyFuel(e.target.value);
+el('te-throttle').onchange=e=>teApplyThrottle(e.target.value);
+el('te-warp').onchange=e=>teApplyWarp(e.target.value);
+
+// ---------- Staging ----------
+function renderStagingList(){
+  const sh=activeShip();
+  const panel=el('stagingPanel');
+  const wrap=el('stagingList');
+  const title=el('stagingTitle');
+  if(!sh||sh.status!=='flying'){ panel.style.display='none'; return; }
+  const seps=[];
+  sh.parts.forEach((pp,i)=>{ if(PARTS[pp.id].type==='separator') seps.push(i); });
+  const engines=sh.parts.filter(pp=>PARTS[pp.id].type==='engine');
+  if(!seps.length&&!engines.length){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  title.textContent=seps.length&&engines.length?'Staging & Engines':(engines.length?'Engines':'Staging');
+  wrap.innerHTML='';
+  seps.forEach((idx,n)=>{
+    const row=document.createElement('div');
+    row.className='stage-row';
+    row.innerHTML='<span>Separator '+(n+1)+'</span>';
+    const btn=document.createElement('button');
+    btn.className='btn small danger'; btn.textContent='Activate';
+    btn.onclick=()=>activateSeparator(sh,idx);
+    row.appendChild(btn); wrap.appendChild(row);
+  });
+  if(engines.length){
+    if(seps.length){
+      const hr=document.createElement('div');
+      hr.style.cssText='border-top:1px solid var(--secondary);margin:6px 0;';
+      wrap.appendChild(hr);
+    }
+    engines.forEach((pp,n)=>{
+      const enabled=sh.engineEnabled[pp.uid]!==false;
+      const row=document.createElement('div');
+      row.className='stage-row engine-row';
+      row.innerHTML='<span>Engine '+(n+1)+'</span>';
+      const btn=document.createElement('button');
+      btn.className='btn small'+(enabled?'':' danger');
+      btn.textContent=enabled?'ON':'OFF';
+      btn.title='Click to '+(enabled?'disable':'enable')+' this engine';
+      btn.onclick=()=>{ sh.engineEnabled[pp.uid]=!enabled; renderStagingList(); };
+      row.appendChild(btn); wrap.appendChild(row);
+    });
+  }
+}
+function activateSeparator(ship,sepIdx){
+  const sepPP=ship.parts[sepIdx];
+  const sepFp=placedFootprint(sepPP);
+  const sepCenterRow=sepFp.row+sepFp.h/2;
+  const top=[],bottom=[];
+  ship.parts.forEach((pp,i)=>{
+    if(i===sepIdx) return;
+    const fp=placedFootprint(pp);
+    const center=fp.row+fp.h/2;
+    (center<sepCenterRow?top:bottom).push(pp);
+  });
+  const topPods=top.filter(pp=>PARTS[pp.id].type==='pod').length;
+  const bottomPods=bottom.filter(pp=>PARTS[pp.id].type==='pod').length;
+  const keep=bottomPods>topPods?bottom:top;
+  const discarded=ship.parts.length-1-keep.length;
+  ship.parts=keep;
+  if(!ship.parts.length){ destroyShip(ship,ship.name+' had no parts left after staging.'); return; }
+  recomputeShipFromParts(ship);
+  showToast(ship.name+': staged — '+discarded+' part(s) jettisoned.');
+  renderStagingList(); renderFuelList(); updateChuteBtn(); saveShips();
+}
+
+function renderFuelList(){
+  const sh=activeShip();
+  const panel=el('fuelPanel');
+  const wrap=el('fuelList');
+  if(!sh||sh.status==='crashed'){ panel.style.display='none'; return; }
+  const tanks=sh.parts.filter(pp=>PARTS[pp.id].type==='tank');
+  if(!tanks.length){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  wrap.innerHTML='';
+  tanks.forEach((pp,n)=>{
+    const cap=PARTS[pp.id].fuel;
+    const cur=Math.max(0,sh.tankFuel[pp.uid]||0);
+    const pct=cap>0?Math.round(100*cur/cap):0;
+    const row=document.createElement('div');
+    row.className='fuel-row';
+    row.innerHTML=`<span class="fuel-name">Tank ${n+1}</span>`
+      +`<span class="fuel-bar-wrap"><span class="fuel-bar" style="width:${pct}%;"></span></span>`
+      +`<span class="fuel-pct">${pct}%</span>`;
+    wrap.appendChild(row);
+  });
+}
+
+// ---------- Rotation input ----------
+const keys={};
+window.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  keys[k]=true;
+  if(k==='a'||e.key==='ArrowLeft'||k==='d'||e.key==='ArrowRight') e.preventDefault();
+});
+window.addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+
+// ============================================================
+// FLIGHT CANVAS / CAMERA
+// ============================================================
+const flightCanvas=el('flightCanvas');
+// alpha:false — render() paints the full background every frame (see the
+// bgR/bgG/bgB fillRect below), so this is never actually transparent.
+const fctx=flightCanvas.getContext('2d',{alpha:false});
+fctx.imageSmoothingEnabled=true;
+if('imageSmoothingQuality' in fctx) fctx.imageSmoothingQuality='high';
+
+// Zoom with scroll wheel (max meters-per-pixel bounded below for system-view scale)
+flightCanvas.addEventListener('wheel',e=>{
+  const sh=activeShip();
+  if(!sh) return;
+  e.preventDefault();
+  const factor=e.deltaY>0?1.15:1/1.15;
+  const maxMpp=sh._inAtmo?ATMO_ZOOM_MAX_MPP:150000000;
+  camera.metersPerPixel=Math.max(0.02,Math.min(maxMpp,camera.metersPerPixel*factor));
+},{passive:false});
+
+document.querySelectorAll('.zbtn').forEach(b=>{
+  b.onclick=()=>{
+    const sh=activeShip();
+    if(sh&&sh._inAtmo&&parseFloat(b.dataset.z)>ATMO_ZOOM_MAX_MPP) return;
+    camera.metersPerPixel=parseFloat(b.dataset.z);
+  };
+});
+
+// Mouse pull tracking on flight canvas
+flightCanvas.addEventListener('mousemove',e=>{
+  const rect=flightCanvas.getBoundingClientRect();
+  flightMousePos.x=e.clientX-rect.left;
+  flightMousePos.y=e.clientY-rect.top;
+});
+flightCanvas.addEventListener('mousedown',e=>{
+  if(e.button===0) flightMouseDown=true;
+});
+
+// ---------- World ↔ Screen coordinate conversion ----------
+// worldToScreen rotates the view so that the active ship always
+// points "up" on screen when the camera-rotation cheat is enabled.
+function worldToScreen(wx,wy){
+  const cw=flightCanvas.clientWidth, ch=flightCanvas.clientHeight;
+  const dx=(wx-camera.x)/camera.metersPerPixel;
+  const dy=-(wy-camera.y)/camera.metersPerPixel;
+  const a=camera.angle;
+  const cos=Math.cos(a), sin=Math.sin(a);
+  // Rotate world displacement by +camera.angle so the ship's heading = screen-up
+  return {
+    x: cw/2 + dx*cos - dy*sin,
+    y: ch/2 + dx*sin + dy*cos,
+  };
+}
+function screenToWorld(sx,sy){
+  const cw=flightCanvas.clientWidth, ch=flightCanvas.clientHeight;
+  const mpp=camera.metersPerPixel;
+  const a=camera.angle;
+  const cos=Math.cos(a), sin=Math.sin(a);
+  const sdx=sx-cw/2, sdy=sy-ch/2;
+  // Exact inverse of worldToScreen (derived from the Y-flip + rotation matrix):
+  // wx_rel = mpp*(sdx*cos + sdy*sin)
+  // wy_rel = mpp*(sdx*sin - sdy*cos)
+  return {
+    x: camera.x + mpp*(sdx*cos + sdy*sin),
+    y: camera.y + mpp*(sdx*sin - sdy*cos),
+  };
+}
+
+// ---------- Click-to-select a ship ----------
+let ctxTargetIdx=-1;
+function hideCtxMenu(){ ctxTargetIdx=-1; el('shipCtxMenu').style.display='none'; }
+function showCtxMenu(idx,screenX,screenY){
+  ctxTargetIdx=idx;
+  const menu=el('shipCtxMenu');
+  const sh=ships[idx];
+  el('ctxShipName').textContent=sh.name+' — '+sh.status;
+  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  menu.style.left=Math.min(screenX+8,CW-190)+'px';
+  menu.style.top=Math.min(screenY+8,CH-140)+'px';
+  menu.style.display='block';
+}
+flightCanvas.addEventListener('click',e=>{
+  const rect=flightCanvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+
+  // Ship selection (always active)
+  let bestShipIdx=-1, bestShipD=Infinity;
+  ships.forEach((sh,i)=>{
+    const s=worldToScreen(sh.pos.x,sh.pos.y);
+    const d=Math.hypot(mx-s.x,my-s.y);
+    if(d<18&&d<bestShipD){ bestShipD=d; bestShipIdx=i; }
+  });
+  if(bestShipIdx>=0){ hideCtxMenu(); hidePlanetCtxMenu(); showCtxMenu(bestShipIdx,mx,my); return; }
+
+  // Planet selection — only when Nav Beacon is on and there is a flying active ship
+  if(cheats.navBeacon&&activeShip()&&activeShip().status==='flying'){
+    let bestPlanet=null, bestPlanetD=Infinity;
+    for(const p of PLANETS){
+      const ppos=planetPositionAt(p,simTime);
+      const s=worldToScreen(ppos.x,ppos.y);
+      const rPx=Math.max(4,p.radius/camera.metersPerPixel);
+      const d=Math.hypot(mx-s.x,my-s.y);
+      // Click anywhere within the planet disc or within 18px of it
+      if(d<rPx+18&&d<bestPlanetD){ bestPlanetD=d; bestPlanet=p; }
+    }
+    if(bestPlanet){ hidePlanetCtxMenu(); showPlanetCtxMenu(bestPlanet,mx,my); return; }
+  }
+
+  hideCtxMenu(); hidePlanetCtxMenu();
+});
+el('ctxSwitchBtn').onclick=()=>{
+  if(ctxTargetIdx<0) return;
+  switchToShip(ctxTargetIdx);
+  hideCtxMenu();
+};
+function deleteShipAt(idx){
+  if(idx<0||idx>=ships.length) return;
+  const wasActive=idx===activeShipIdx;
+  ships.splice(idx,1);
+  if(wasActive) activeShipIdx=ships.length?0:-1;
+  else if(idx<activeShipIdx) activeShipIdx--;
+  updateEngineBtn(); updateChuteBtn(); renderShipList(); renderStagingList(); renderFuelList();
+  saveShips();
+}
+function switchToShip(idx){
+  const sh=ships[idx]; if(!sh) return;
+  activeShipIdx=idx;
+  camera.x=sh.pos.x; camera.y=sh.pos.y;
+  el('throttleSlider').value=Math.round(sh.throttle*100);
+  hud.throttle.textContent=Math.round(sh.throttle*100)+'%';
+  updateEngineBtn(); updateChuteBtn(); renderStagingList(); renderFuelList(); renderShipList();
+  if(cheats.typeEdit) populateTypeEditInputs();
+}
+el('ctxDeleteBtn').onclick=()=>{
+  if(ctxTargetIdx<0) return;
+  deleteShipAt(ctxTargetIdx);
+  hideCtxMenu();
+};
+
+// Places the Ships panel directly below the HUD's actual current height —
+// measured live rather than assumed, so it stays clear of the HUD whether
+// or not the TypeEdit cheat panel (which adds ~5 extra rows) is showing.
+function positionShipList(){
+  const hud=el('hud'), list=el('shipList');
+  const gap=18; // matches --sp-5, the spacing used between the other float panels
+  list.style.top=(hud.offsetTop+hud.offsetHeight+gap)+'px';
+}
+function renderShipList(){
+  positionShipList();
+  const wrap=el('shipList');
+  if(ships.length===0){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  wrap.innerHTML='<h3>Ships</h3>';
+  ships.forEach((sh,i)=>{
+    const row=document.createElement('div');
+    row.className='ship-row'+(i===activeShipIdx?' active':'');
+    row.innerHTML=`<span class="ship-name">${sh.name}</span><span class="ship-status status-${sh.status}">${sh.status}</span>`;
+    row.onclick=()=>switchToShip(i);
+    const delBtn=document.createElement('button');
+    delBtn.className='ship-del'; delBtn.textContent='✕'; delBtn.title='Delete '+sh.name;
+    delBtn.onclick=e=>{ e.stopPropagation(); deleteShipAt(i); };
+    row.appendChild(delBtn);
+    wrap.appendChild(row);
+  });
+}
+
+// ---------- Stars ----------
+const STARS=[];
+for(let i=0;i<220;i++) STARS.push({x:Math.random(),y:Math.random(),r:Math.random()*1.3+0.3,a:Math.random()*0.5+0.35});
+
+// Stars are pre-rendered once into an offscreen canvas instead of drawing 220
+// individual arcs every frame — cheap on desktop but adds up on weak GPUs at
+// 60fps. Re-rendered only when the canvas's pixel size changes (resize/DPR
+// change); render() blits it with a single drawImage and dims it uniformly
+// via globalAlpha, which is equivalent to the old per-star alpha*starFade
+// since alpha compositing multiplies.
+const starLayer=document.createElement('canvas');
+const starLayerCtx=starLayer.getContext('2d');
+let starLayerW=0, starLayerH=0;
+function renderStarLayer(pxW,pxH,dpr){
+  starLayer.width=pxW; starLayer.height=pxH;
+  STARS.forEach(st=>{
+    starLayerCtx.fillStyle=`rgba(255,255,255,${st.a})`;
+    starLayerCtx.beginPath();
+    starLayerCtx.arc(st.x*pxW,st.y*pxH,st.r*dpr,0,Math.PI*2);
+    starLayerCtx.fill();
+  });
+  starLayerW=pxW; starLayerH=pxH;
+}
+
+// ============================================================
+// PHYSICS
+// ============================================================
+function gravAccel(pos,bodyPos,GM){
+  const dx=bodyPos.x-pos.x, dy=bodyPos.y-pos.y;
+  const r2=dx*dx+dy*dy;
+  const r=Math.sqrt(r2)||1;
+  const a=GM/r2;
+  return {ax:a*dx/r, ay:a*dy/r, dist:r};
+}
+function planetVelocityAt(p,t){
+  const a=p.initialAngle+p.omega*t;
+  return {
+    x:-p.omega*p.distance*Math.sin(a),
+    y: p.omega*p.distance*Math.cos(a),
+  };
+}
+function findDominantBody(pos,t){
+  let best=null;
+  for(const p of PLANETS){
+    const ppos=planetPositionAt(p,t);
+    const d=Math.hypot(pos.x-ppos.x,pos.y-ppos.y);
+    if(d<=p.soi&&(!best||p.soi<best.p.soi)){ best={p,ppos,dist:d}; }
+  }
+  return best;
+}
+function destroyShip(f,reason){
+  f.status='crashed'; f.statusMsg=reason; f.engineOn=false; f._pendingRemoval=true;
+  if(f._isBeaconClone) return; // no UI side-effects for prediction clones
+  shipListDirty=true;
+  if(f===activeShip()) updateEngineBtn();
+  showToast(reason);
+}
+
+// Fires every individually-enabled engine that still has fuel in its
+// connected tank(s) (see computeEngineConnections), draining exactly those
+// tanks. Returns the combined thrust produced this step (0 if the master
+// engine switch is off or nothing can fire). All engines share the ship's
+// angle/throttle (no gimbaling), so callers just need this scalar total.
+function fireEnginesAndDrainFuel(f,dt){
+  if(!f.engineOn) return 0;
+  let totalThrust=0;
+  f.parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    if(d.type!=='engine'||f.engineEnabled[pp.uid]===false) return;
+    const tankUids=f.engineConnections[pp.uid]||[];
+    const available=cheats.infiniteFuel?Infinity:tankUids.reduce((sum,tid)=>sum+(f.tankFuel[tid]||0),0);
+    if(available<=0) return;
+    totalThrust+=d.thrust;
+    if(!cheats.infiniteFuel){
+      let need=Math.min(d.fuelRate*f.throttle*dt,available);
+      for(const tid of tankUids){
+        if(need<=0) break;
+        const have=f.tankFuel[tid]||0;
+        const take=Math.min(have,need);
+        f.tankFuel[tid]=have-take; need-=take;
+      }
+    }
+  });
+  if(!cheats.infiniteFuel){
+    f.fuel=Object.values(f.tankFuel).reduce((a,b)=>a+b,0);
+    // Auto-off only when every tank any engine could draw from is truly dry —
+    // deliberately ignores engineEnabled here, so disabling engines by hand
+    // never by itself flips the master switch off.
+    const anyReachableFuel=f.parts.some(pp=>{
+      if(PARTS[pp.id].type!=='engine') return false;
+      const tankUids=f.engineConnections[pp.uid]||[];
+      return tankUids.some(tid=>(f.tankFuel[tid]||0)>0);
+    });
+    if(!anyReachableFuel){ f.engineOn=false; if(f===activeShip()) updateEngineBtn(); }
+  }
+  return totalThrust;
+}
+
+// WASD strafe/translate via RCS thrusters — independent of the main
+// engine on/off switch, only fires for the player-controlled active ship.
+function fireRCS(f,dt){
+  if(f.status!=='flying') return {ax:0,ay:0};
+  let fx=0, fy=0;
+  if(keys['w']) fy+=1;
+  if(keys['s']) fy-=1;
+  if(keys['a']) fx-=1;
+  if(keys['d']) fx+=1;
+  if(!fx&&!fy) return {ax:0,ay:0};
+  const mag=Math.hypot(fx,fy); fx/=mag; fy/=mag;
+  let totalThrust=0;
+  f.parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    if(d.type!=='rcs') return;
+    const tankUids=f.engineConnections[pp.uid]||[];
+    const available=cheats.infiniteFuel?Infinity:tankUids.reduce((s,tid)=>s+(f.tankFuel[tid]||0),0);
+    if(available<=0) return;
+    totalThrust+=d.thrust;
+    if(!cheats.infiniteFuel){
+      let need=Math.min(d.fuelRate*dt,available);
+      for(const tid of tankUids){
+        if(need<=0) break;
+        const have=f.tankFuel[tid]||0;
+        const take=Math.min(have,need);
+        f.tankFuel[tid]=have-take; need-=take;
+      }
+    }
+  });
+  if(totalThrust<=0) return {ax:0,ay:0};
+  if(!cheats.infiniteFuel) f.fuel=Object.values(f.tankFuel).reduce((a,b)=>a+b,0);
+  const accel=totalThrust/(f.dryMass+f.fuel);
+  const fwdX=Math.sin(f.angle), fwdY=Math.cos(f.angle);
+  const sideX=Math.cos(f.angle), sideY=-Math.sin(f.angle);
+  return {ax:(fwdX*fy+sideX*fx)*accel, ay:(fwdY*fy+sideY*fx)*accel};
+}
+
+// Cone parts mounted flush against a tank reduce atmospheric drag
+function shipDragMult(f){
+  let m=1;
+  f.parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    if(d.type!=='cone') return;
+    const onTank=f.parts.some(o=>PARTS[o.id].type==='tank'&&footprintsTouch(pp,o));
+    if(onTank) m*=d.dragMult;
+  });
+  return m;
+}
+
+function integrate(f,dt,t){
+  const mass=f.dryMass+f.fuel;
+  const dom=findDominantBody(f.pos,t);
+  // Are we the active ship and mouse-pull cheat is on?
+  const isActive=f===activeShip();
+  const doPull=cheats.mousePull&&flightMouseDown&&isActive;
+
+  if(dom){
+    const pVel=planetVelocityAt(dom.p,t);
+    let rx=f.pos.x-dom.ppos.x,  ry=f.pos.y-dom.ppos.y;
+    let rvx=f.vel.x-pVel.x,     rvy=f.vel.y-pVel.y;
+    const rdist=Math.hypot(rx,ry)||1;
+    const gMag=dom.p.GM/(rdist*rdist);
+    let rax=-gMag*rx/rdist;
+    let ray=-gMag*ry/rdist;
+    f._domBody=dom.p;
+
+    // Atmosphere drag — density is an artificial function of depth-in-atmosphere,
+    // not a physical air-density model. Exponent (1.6) is steeper than the
+    // exponent used by the visual atmosphere tint in getAtmoDensity() (1.4);
+    // that's intentional — drag ramping in faster near the surface reads better
+    // for gameplay than the smoother visual fade wants.
+    let inAtmo=false;
+    if(dom.p.atmo){
+      let density=0;
+      if(dom.p.solid){
+        const top=dom.p.radius*(1+dom.p.atmoFrac);
+        if(rdist<top){
+          const depth=Math.max(0,Math.min(1,(top-rdist)/(top-dom.p.radius)));
+          density=Math.pow(depth,1.6); inAtmo=true;
+        }
+      } else if(rdist<dom.p.radius){
+        const depth=1-(rdist/dom.p.radius);
+        density=Math.min(1,depth*1.4); inAtmo=true;
+        if(depth>GAS_GIANT_CRUSH_DEPTH){
+          destroyShip(f,f.name+' was crushed deep in '+dom.p.name+'\u2019s atmosphere.');
+          return;
+        }
+      }
+      if(density>0){
+        let dragK=ATMO_DRAG_K*density*shipDragMult(f);
+        if(f.chuteDeployed) dragK*=PARACHUTE_DRAG_MULT;
+        const decay=Math.exp(-dragK*dt);
+        rvx*=decay; rvy*=decay;
+      }
+    }
+    f._inAtmo=inAtmo;
+
+    // Engine thrust — each enabled engine draws only from its connected tank(s)
+    const activeThrust=fireEnginesAndDrainFuel(f,dt);
+    if(activeThrust>0){
+      const thrustAccel=(activeThrust*f.throttle)/mass;
+      rax+=thrustAccel*Math.sin(f.angle);
+      ray+=thrustAccel*Math.cos(f.angle);
+    }
+
+    // RCS translate thrust (WASD)
+    if(isActive){
+      const rcsA=fireRCS(f,dt);
+      rax+=rcsA.ax; ray+=rcsA.ay;
+    }
+
+    // Mouse-pull cheat — force is heliocentric so convert to relative frame
+    if(doPull){
+      const wmouse=screenToWorld(flightMousePos.x,flightMousePos.y);
+      const dmx=wmouse.x-f.pos.x, dmy=wmouse.y-f.pos.y;
+      const dist=Math.hypot(dmx,dmy)||1;
+      rax+=MOUSE_PULL_ACCEL*dmx/dist;
+      ray+=MOUSE_PULL_ACCEL*dmy/dist;
+    }
+
+    rvx+=rax*dt; rvy+=ray*dt;
+    rx+=rvx*dt; ry+=rvy*dt;
+
+    const pPosNew=planetPositionAt(dom.p,t+dt);
+    const pVelNew=planetVelocityAt(dom.p,t+dt);
+    f.pos.x=pPosNew.x+rx; f.pos.y=pPosNew.y+ry;
+    f.vel.x=pVelNew.x+rvx; f.vel.y=pVelNew.y+rvy;
+
+    if(Math.hypot(f.pos.x,f.pos.y)<=SUN_RADIUS){
+      destroyShip(f,f.name+' was vaporized by the Sun.'); return;
+    }
+
+    // Landing / crash
+    if(dom.p.solid){
+      const newRdist=Math.hypot(rx,ry);
+      const foot=shipFootOffset(f);
+      const groundR=dom.p.radius+foot;
+      if(newRdist<=groundR){
+        const nx=rx/(newRdist||1), ny=ry/(newRdist||1);
+        f.pos.x=pPosNew.x+nx*groundR;
+        f.pos.y=pPosNew.y+ny*groundR;
+        const relSpeed=Math.hypot(rvx,rvy);
+        if(relSpeed<=SAFE_LANDING_SPEED){
+          f.status='landed'; f.statusMsg='Landed safely on '+dom.p.name+'.'; shipListDirty=true;
+          f.landedOnPlanet=dom.p;
+          f.landedRelPos={x:nx*groundR, y:ny*groundR};
+          f.vel.x=pVelNew.x; f.vel.y=pVelNew.y;
+          f.engineOn=false; if(f===activeShip()) updateEngineBtn();
+        } else {
+          destroyShip(f,f.name+' was destroyed on impact with '+dom.p.name+' at '+relSpeed.toFixed(0)+' u/s.');
+        }
+        return;
+      }
+    }
+
+  } else {
+    // Interplanetary — Sun gravity only
+    f._domBody=null; f._inAtmo=false;
+    const g=gravAccel(f.pos,SUN_POS,GM_SUN);
+    let ax=g.ax, ay=g.ay;
+
+    const activeThrustIP=fireEnginesAndDrainFuel(f,dt);
+    if(activeThrustIP>0){
+      const thrustAccel=(activeThrustIP*f.throttle)/mass;
+      ax+=thrustAccel*Math.sin(f.angle);
+      ay+=thrustAccel*Math.cos(f.angle);
+    }
+
+    if(isActive){
+      const rcsA=fireRCS(f,dt);
+      ax+=rcsA.ax; ay+=rcsA.ay;
+    }
+
+    // Mouse-pull cheat
+    if(doPull){
+      const wmouse=screenToWorld(flightMousePos.x,flightMousePos.y);
+      const dmx=wmouse.x-f.pos.x, dmy=wmouse.y-f.pos.y;
+      const dist=Math.hypot(dmx,dmy)||1;
+      ax+=MOUSE_PULL_ACCEL*dmx/dist;
+      ay+=MOUSE_PULL_ACCEL*dmy/dist;
+    }
+
+    f.vel.x+=ax*dt; f.vel.y+=ay*dt;
+    f.pos.x+=f.vel.x*dt; f.pos.y+=f.vel.y*dt;
+
+    if(Math.hypot(f.pos.x,f.pos.y)<=SUN_RADIUS){
+      destroyShip(f,f.name+' was vaporized by the Sun.'); return;
+    }
+
+    for(const p of PLANETS){
+      if(!p.solid) continue;
+      const ppos=planetPositionAt(p,t+dt);
+      const d=Math.hypot(f.pos.x-ppos.x,f.pos.y-ppos.y);
+      const foot=shipFootOffset(f);
+      const groundR=p.radius+foot;
+      if(d<=groundR){
+        const nx=(f.pos.x-ppos.x)/(d||1), ny=(f.pos.y-ppos.y)/(d||1);
+        f.pos.x=ppos.x+nx*groundR; f.pos.y=ppos.y+ny*groundR;
+        const pVelNew=planetVelocityAt(p,t+dt);
+        const relSpeed=Math.hypot(f.vel.x-pVelNew.x,f.vel.y-pVelNew.y);
+        if(relSpeed<=SAFE_LANDING_SPEED){
+          f.status='landed'; f.statusMsg='Landed safely on '+p.name+'.'; shipListDirty=true;
+          f.landedOnPlanet=p; f.landedRelPos={x:nx*groundR,y:ny*groundR};
+          f.vel.x=pVelNew.x; f.vel.y=pVelNew.y;
+          f.engineOn=false; if(f===activeShip()) updateEngineBtn();
+        } else {
+          destroyShip(f,f.name+' was destroyed on impact with '+p.name+' at '+relSpeed.toFixed(0)+' u/s.');
+        }
+        return;
+      }
+    }
+  }
+}
+
+// Adaptive substep sizing: aim to cross ~half the distance to the nearest
+// surface (SUBSTEP_NEAREST_FRACTION) per step, so close-approach ships
+// automatically get finer steps. MAX_INTERP is a relaxed cap far from any
+// body; MAX_SOI is a tight cap inside a planet's SOI, needed so the ship's
+// path stays accurate enough to match the Nav Beacon's fixed 0.25s steps
+// even at high warp. DT_MIN floors step size so a ship sitting nearly still
+// at a surface can't stall the loop.
+const SUBSTEP_NEAREST_FRACTION = 0.5;
+const SUBSTEP_DT_MAX_INTERP = 2000; // generous cap far from all bodies
+const SUBSTEP_DT_MAX_SOI     = 150;  // tight cap inside a planet SOI for accuracy
+const SUBSTEP_DT_MIN = 0.002;
+function stepSimSeconds(f,simSeconds,tStart,maxSubstepDtOverride){
+  let remaining=simSeconds, t=tStart, steps=0;
+  while(remaining>1e-6&&steps<MAX_SUBSTEPS_PER_FRAME&&f.status==='flying'){
+    const dom=findDominantBody(f.pos,t);
+    // Use a tighter max-dt cap inside a planet's SOI so that high-warp passes
+    // stay accurate enough to match Nav Beacon ballistic predictions.
+    const maxDt=maxSubstepDtOverride!==undefined?maxSubstepDtOverride
+                :(dom?SUBSTEP_DT_MAX_SOI:SUBSTEP_DT_MAX_INTERP);
+    const nearest=dom
+      ?Math.max(1,dom.dist-(dom.p.solid?dom.p.radius:dom.p.radius*0.3))
+      :Math.max(1,Math.hypot(f.pos.x-SUN_POS.x,f.pos.y-SUN_POS.y)-SUN_RADIUS);
+    let relVx=f.vel.x, relVy=f.vel.y;
+    if(dom){ const pv=planetVelocityAt(dom.p,t); relVx-=pv.x; relVy-=pv.y; }
+    const speed=Math.max(1,Math.hypot(relVx,relVy));
+    const capDt=Math.min(maxDt,(nearest/speed)*SUBSTEP_NEAREST_FRACTION);
+    const dt=Math.min(remaining,Math.max(capDt,SUBSTEP_DT_MIN));
+    integrate(f,dt,t); t+=dt; remaining-=dt; steps++;
+  }
+}
+
+// ============================================================
+// NAV BEACON
+// ============================================================
+
+// Create a physics clone of a ship for ballistic prediction (no thrust, no side effects).
+// _isBeaconClone suppresses toasts and engine-button updates in destroyShip.
+function cloneShipForBeacon(ship){
+  return {
+    pos:{x:ship.pos.x, y:ship.pos.y},
+    vel:{x:ship.vel.x, y:ship.vel.y},
+    angle:ship.angle,
+    dryMass:ship.dryMass,
+    fuel:ship.fuel,
+    fuelCap:ship.fuelCap,
+    sprite:ship.sprite,   // needed by shipFootOffset inside integrate
+    parts:ship.parts,
+    engineConnections:ship.engineConnections,
+    engineEnabled:{},
+    tankFuel:{},
+    engineOn:false,       // no thrust in prediction
+    throttle:0,
+    chuteDeployed:false,
+    status:'flying',
+    name:'beacon-clone',
+    _inAtmo:ship._inAtmo||false,
+    _domBody:ship._domBody||null,
+    _pendingRemoval:false,
+    _isBeaconClone:true,  // prevents destroyShip from firing toasts/UI calls
+  };
+}
+
+// Substep loop for beacon prediction — same adaptive logic as stepSimSeconds
+// but capped per call (MAX_BEACON_STEPS) so a far-future prediction at high
+// warp can't stall the frame. Can stop before consuming all of `simSeconds`
+// if the budget runs out, so it returns the sim-time actually advanced —
+// callers must sync their clock to that real amount, not the requested one,
+// or the beacon path desyncs and jitters at high timewarp.
+const MAX_BEACON_STEPS = 2000;
+function beaconStepSimSeconds(f, simSeconds, tStart){
+  let remaining=simSeconds, t=tStart, steps=0;
+  while(remaining>1e-6 && steps<MAX_BEACON_STEPS && f.status==='flying'){
+    const dom=findDominantBody(f.pos,t);
+    const maxDt=dom ? SUBSTEP_DT_MAX_SOI : SUBSTEP_DT_MAX_INTERP;
+    const nearest=dom
+      ?Math.max(1,dom.dist-(dom.p.solid?dom.p.radius:dom.p.radius*0.3))
+      :Math.max(1,Math.hypot(f.pos.x-SUN_POS.x,f.pos.y-SUN_POS.y)-SUN_RADIUS);
+    let relVx=f.vel.x, relVy=f.vel.y;
+    if(dom){ const pv=planetVelocityAt(dom.p,t); relVx-=pv.x; relVy-=pv.y; }
+    const speed=Math.max(1,Math.hypot(relVx,relVy));
+    const capDt=Math.min(maxDt,(nearest/speed)*SUBSTEP_NEAREST_FRACTION);
+    const dt=Math.min(remaining,Math.max(capDt,SUBSTEP_DT_MIN));
+    integrate(f,dt,t); t+=dt; remaining-=dt; steps++;
+  }
+  return t-tStart; // actual sim-seconds advanced (may be < simSeconds)
+}
+
+// Simulate 15 *real-life* seconds of ballistic flight from the ship's current
+// state, regardless of the current warp level.  At warp W, 15 real seconds
+// equals 15×W sim-seconds, so the path covers exactly the distance the ship
+// will travel over the next 15 seconds of clock time.  60 equal segments are
+// used so the path has a smooth, consistent point density.
+// Same body-relative tagging pushTrail uses — lets drawNavBeaconPath re-anchor
+// to the planet's current position via trailPointWorldPos, matching the trail.
+function tagBeaconPoint(x,y,t){
+  const dom=findDominantBody({x,y},t);
+  if(!dom) return {x,y};
+  return {x,y,body:dom.p,relX:x-dom.ppos.x,relY:y-dom.ppos.y};
+}
+function computeNavBeaconPath(ship, simT, currentWarp){
+  const POINTS = 60;
+  // 15 real seconds × warp = how many sim-seconds forward to predict.
+  // Cap at 15 million sim-seconds to keep computation finite at extreme warp.
+  const totalSimSecs = Math.min(15 * currentWarp, 15e6);
+  const segSimSecs   = totalSimSecs / POINTS;
+
+  const clone=cloneShipForBeacon(ship);
+  const path=[tagBeaconPoint(clone.pos.x, clone.pos.y, simT)];
+  let t=simT;
+
+  for(let i=0;i<POINTS;i++){
+    // Advance by the sim-time actually simulated this chunk, not the amount
+    // requested — beaconStepSimSeconds can stop short if it hits its step
+    // budget, and assuming it always finished is what caused the predicted
+    // path to desync from the clone's real state and jitter at high warp.
+    const advanced=beaconStepSimSeconds(clone, segSimSecs, t);
+    t+=advanced;
+    path.push(tagBeaconPoint(clone.pos.x, clone.pos.y, t));
+    if(clone.status!=='flying') break;
+    // If a chunk came back significantly short, the step budget can't keep
+    // up with this look-ahead horizon at the current position/warp — further
+    // chunks would only compound inaccuracy, so stop the path here rather
+    // than silently drawing a shorter, unlabeled preview past this point.
+    if(advanced<segSimSecs*0.999) break;
+  }
+  return path;
+}
+
+// ── Physics-based intercept solver ──────────────────────────────────────────
+// Simulates forward T sim-seconds with no thrust (using physics) and returns
+// the final position. Uses coarse fixed steps for speed; fine enough for the
+// iterative correction below to converge.
+function simulateForIntercept(baseShip, dvx, dvy, totalSimSecs, simT){
+  const clone=cloneShipForBeacon(baseShip);
+  clone.vel.x+=dvx; clone.vel.y+=dvy;
+  // Fixed step count; step size self-limits to SUBSTEP_DT_MAX caps via beaconStep
+  const STEPS=60;
+  const segSecs=totalSimSecs/STEPS;
+  let t=simT;
+  for(let i=0;i<STEPS;i++){
+    if(clone.status!=='flying') break;
+    const advanced=beaconStepSimSeconds(clone, segSecs, t);
+    t+=advanced;
+  }
+  return {x:clone.pos.x, y:clone.pos.y, crashed:clone.status!=='flying'};
+}
+
+// Find the best-intercept delta-V to reach a target planet, searching both
+// WHEN to burn and how long the transfer should take, not just "burn now" —
+// so it can find plans like coasting until a gravity-well pass has already
+// bent the ship's velocity toward the target, cutting the thrust needed.
+// Walks a coasting clone of the ship through candidate departure offsets;
+// at each one, runs the shooting method across a range of transfer
+// durations and tracks the global best |Δv|. Returns one frozen plan
+// (including when to execute it), not something recomputed on a timer.
+const DEPARTURE_OFFSETS=[
+  0, 300, 900, 1800, 3600, 7200, 14400, 21600,
+  43200, 86400, 172800, 345600, 604800, 1209600, 2592000,
+];
+const TRANSFER_CANDIDATES=[
+  3600, 10800, 21600, 43200,
+  86400, 259200, 604800,
+  1296000, 3456000, 8640000,
+];
+function findBestInterceptWindow(ship, planet, simT){
+  const clone=cloneShipForBeacon(ship);
+  let t=simT;
+  let best=null;
+
+  for(const offset of DEPARTURE_OFFSETS){
+    // Coast the clone (no thrust — pure gravity) from wherever it currently
+    // is up to this candidate departure time.
+    const targetT=simT+offset;
+    if(targetT>t){
+      const need=targetT-t;
+      const advanced=beaconStepSimSeconds(clone, need, t);
+      t+=advanced;
+      // Ship hit something while coasting this far — no point considering
+      // departure times beyond where it would already be destroyed/landed.
+      if(clone.status!=='flying') break;
+      // Step budget couldn't fully cover the coast to this offset — further,
+      // later offsets would only be less reliable, so stop extending here.
+      if(advanced<need*0.999) break;
+    }
+
+    for(const T of TRANSFER_CANDIDATES){
+      const pFuture=planetPositionAt(planet, t+T);
+      let dvx=(pFuture.x-clone.pos.x)/T - clone.vel.x;
+      let dvy=(pFuture.y-clone.pos.y)/T - clone.vel.y;
+
+      for(let iter=0; iter<5; iter++){
+        const result=simulateForIntercept(clone, dvx, dvy, T, t);
+        if(result.crashed) break;
+        dvx+=(pFuture.x-result.x)/T;
+        dvy+=(pFuture.y-result.y)/T;
+      }
+
+      const mag=Math.hypot(dvx,dvy);
+      if(isFinite(mag) && (!best||mag<best.mag)){
+        best={
+          dvx, dvy, mag, interceptT:T,
+          burnSimTime:t,             // WHEN (sim-time) to execute this burn
+          waitSecs:t-simT,           // how long from now that is
+          burnPos:{x:clone.pos.x,y:clone.pos.y}, // WHERE the ship will be then
+        };
+      }
+    }
+  }
+  return best;
+}
+
+// Force-onto-plan: at very high timewarp, stepSimSeconds' adaptive
+// substepping (capped by MAX_SUBSTEPS_PER_FRAME) is only an approximation,
+// so the ship's real path can drift from the finer-stepped plan
+// findBestInterceptWindow computed. Rather than reworking the integrator, we
+// freeze the plan's coast trajectory once here and snap the ship back onto
+// it every frame until the burn window opens (see loop()).
+// Samples the same no-thrust path findBestInterceptWindow's clone took from
+// `simT` to `burnSimTime`, at POINTS points, as {t,x,y,vx,vy}.
+function computeNavPlanCoastPath(ship, simT, burnSimTime){
+  const POINTS=60;
+  const totalSimSecs=Math.max(0,burnSimTime-simT);
+  const path=[{t:simT,x:ship.pos.x,y:ship.pos.y,vx:ship.vel.x,vy:ship.vel.y}];
+  if(totalSimSecs<=0) return path;
+  const segSimSecs=totalSimSecs/POINTS;
+  const clone=cloneShipForBeacon(ship);
+  let t=simT;
+  for(let i=0;i<POINTS;i++){
+    const advanced=beaconStepSimSeconds(clone, segSimSecs, t);
+    t+=advanced;
+    path.push({t, x:clone.pos.x, y:clone.pos.y, vx:clone.vel.x, vy:clone.vel.y});
+    if(clone.status!=='flying') break;
+    // Step budget couldn't keep up with this chunk — later samples would only
+    // compound inaccuracy, so stop extending the stored plan here.
+    if(advanced<segSimSecs*0.999) break;
+  }
+  return path;
+}
+
+// Interpolate {x,y,vx,vy} at sim-time `t` from a frozen coast path (above).
+// Clamps to the path's ends instead of extrapolating.
+function sampleNavPlanCoastPath(path, t){
+  if(!path||path.length===0) return null;
+  if(t<=path[0].t) return path[0];
+  const last=path[path.length-1];
+  if(t>=last.t) return last;
+  for(let i=0;i<path.length-1;i++){
+    const a=path[i], b=path[i+1];
+    if(t>=a.t&&t<=b.t){
+      const span=b.t-a.t;
+      const f=span>1e-9?(t-a.t)/span:0;
+      return {
+        x:a.x+(b.x-a.x)*f, y:a.y+(b.y-a.y)*f,
+        vx:a.vx+(b.vx-a.vx)*f, vy:a.vy+(b.vy-a.vy)*f,
+      };
+    }
+  }
+  return last;
+}
+
+// Guaranteed-intercept post-burn coast path.
+// findBestInterceptWindow's shooting solver can converge to a slightly-off
+// burn for tricky geometries, which a plain ballistic coast would faithfully
+// reproduce as a miss. Instead of chasing a perfect solver, we guarantee the
+// outcome: take the ordinary coast, measure the miss between its endpoint and
+// the planet's true arrival position, and blend that correction in with an
+// ease-in-out curve (none right at burn end, most through the middle, spread
+// across the whole coast — no last-second snap). The final sample always
+// exactly matches the planet's arrival position, so the ship is guaranteed to
+// reach its SOI; an already-accurate solver just gets ~zero correction.
+function computeNavPostBurnCoastPath(ship, simT, arrivalT, planet){
+  const rawPath=computeNavPlanCoastPath(ship, simT, arrivalT);
+  if(rawPath.length<2) return rawPath;
+
+  const rawFinal=rawPath[rawPath.length-1];
+  // Use the raw path's own final time, not the requested arrivalT — the raw
+  // sim can stop short (step-budget or an unrelated collision along the way),
+  // and correcting toward the planet's position at a time we never actually
+  // reached would just introduce a new mismatch.
+  const actualArrival=rawFinal.t;
+  const targetPos=planetPositionAt(planet, actualArrival);
+  const missX=targetPos.x-rawFinal.x;
+  const missY=targetPos.y-rawFinal.y;
+  const missMag=Math.hypot(missX,missY);
+  // Already close enough (the common case for a well-behaved solve) — leave
+  // the natural ballistic path untouched rather than nudging it for no
+  // visible reason.
+  const NO_CORRECTION_NEEDED=50;
+  if(missMag<NO_CORRECTION_NEEDED) return rawPath;
+
+  const startT=rawPath[0].t;
+  const span=Math.max(1e-6, actualArrival-startT);
+  const corrected=rawPath.map(p=>{
+    const frac=Math.min(1,Math.max(0,(p.t-startT)/span));
+    const ease=frac*frac*(3-2*frac); // smoothstep: 0 at start, 1 at end, zero slope at both ends
+    return {t:p.t, x:p.x+missX*ease, y:p.y+missY*ease, vx:p.vx, vy:p.vy};
+  });
+  // Re-derive velocity from the corrected positions (central differences)
+  // instead of leaving the raw, uncorrected velocities in place — a forced
+  // position that's moving one way while the forced velocity points another
+  // is what would actually read as jarring/sliding, not the position nudge
+  // itself.
+  for(let i=0;i<corrected.length;i++){
+    const prev=corrected[Math.max(0,i-1)];
+    const next=corrected[Math.min(corrected.length-1,i+1)];
+    const dt=next.t-prev.t;
+    if(dt>1e-6){
+      corrected[i].vx=(next.x-prev.x)/dt;
+      corrected[i].vy=(next.y-prev.y)/dt;
+    }
+  }
+  return corrected;
+}
+
+// Returns whichever frozen coast path currently governs the ship's forced
+// position — the pre-burn coast to the burn window, or the post-burn coast
+// to the planned intercept — or null if neither applies right now (e.g. the
+// burn window is open and the player is expected to fly the burn for real).
+// Centralizes the phase check so the warp lock and the position-forcing
+// block in loop() can't disagree about when forcing is active.
+// Accepts an optional time to check against instead of the live `simTime` —
+// see the call site in loop() for why that matters at high timewarp.
+function activeNavForcedPath(atTime){
+  if(!cheats.navBeacon||!navDeltaV) return null;
+  const sh=activeShip();
+  if(!sh||sh.status!=='flying') return null;
+  const t=atTime===undefined?simTime:atTime;
+  if(navPlanCoastPath.length&&t<navDeltaV.burnSimTime){
+    return navPlanCoastPath;
+  }
+  if(navBurnDone&&navPostBurnCoastPath.length&&t<navDeltaV.burnSimTime+navDeltaV.interceptT){
+    return navPostBurnCoastPath;
+  }
+  return null;
+}
+
+function hidePlanetCtxMenu(){
+  navCtxPlanet=null;
+  el('planetCtxMenu').style.display='none';
+}
+function showPlanetCtxMenu(planet, screenX, screenY){
+  navCtxPlanet=planet;
+  const menu=el('planetCtxMenu');
+  el('planetCtxName').textContent=planet.name;
+  // Show some quick stats
+  const dist=Math.hypot(
+    planetPositionAt(planet,simTime).x-activeShip().pos.x,
+    planetPositionAt(planet,simTime).y-activeShip().pos.y);
+  el('planetCtxInfo').textContent='Distance: '+fmtDist(dist);
+  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  menu.style.left=Math.min(screenX+8,CW-220)+'px';
+  menu.style.top=Math.min(screenY+8,CH-140)+'px';
+  menu.style.display='block';
+}
+el('planetCtxNavBtn').onclick=()=>{
+  const sh=activeShip();
+  if(!sh||!navCtxPlanet) return;
+  navTargetPlanet=navCtxPlanet;
+  navDeltaV=findBestInterceptWindow(sh, navTargetPlanet, simTime);
+  navBurnWarpDropped=false;
+  navBurnTargetVel=null;
+  navPlanCoastPath=navDeltaV?computeNavPlanCoastPath(sh, simTime, navDeltaV.burnSimTime):[];
+  navBurnDone=false;
+  navPostBurnCoastPath=[];
+  hidePlanetCtxMenu();
+  if(navDeltaV && navDeltaV.waitSecs>1){
+    showToast('Nav Beacon: optimal burn window for '+navTargetPlanet.name+' found — coast and wait for it.');
+  } else {
+    showToast('Nav Beacon: navigating to '+navTargetPlanet.name+'. Follow the green arrow.');
+  }
+};
+el('planetCtxCloseBtn').onclick=()=>{ hidePlanetCtxMenu(); };
+
+// Ship flight trail, capped at TRAIL_MAX points. A plain array with
+// push()+shift() would cost O(n) per point once full (shift re-indexes
+// everything) — expensive since pushTrail can fire many times per frame
+// during timewarp. This fixed-size ring buffer makes both push and
+// iteration O(1) per point, with the same forEach(p,i) order callers expect.
+const TRAIL_MAX=3000;
+function makeTrail(){
+  return {
+    buf:new Array(TRAIL_MAX), start:0, count:0,
+    push(p){
+      this.buf[(this.start+this.count)%TRAIL_MAX]=p;
+      if(this.count<TRAIL_MAX) this.count++;
+      else this.start=(this.start+1)%TRAIL_MAX;
+    },
+    get length(){ return this.count; },
+    forEach(fn){
+      for(let i=0;i<this.count;i++) fn(this.buf[(this.start+i)%TRAIL_MAX], i);
+    },
+  };
+}
+function pushTrail(f){
+  const p={x:f.pos.x, y:f.pos.y};
+  if(!f.lastTrailPos||Math.hypot(p.x-f.lastTrailPos.x,p.y-f.lastTrailPos.y)>EARTH.radius*0.02){
+    // Close to a planet, the point is stored relative to that planet instead
+    // of in system coordinates, so the trail moves with the planet later
+    // instead of staying fixed against a body that has since orbited away.
+    if(f._domBody){
+      const bpos=planetPositionAt(f._domBody,simTime);
+      p.body=f._domBody; p.relX=p.x-bpos.x; p.relY=p.y-bpos.y;
+    }
+    f.trail.push(p);
+    f.lastTrailPos=p;
+  }
+}
+// Resolves a stored trail point to its current world position — planet-
+// relative points are re-anchored to that planet's live position.
+function trailPointWorldPos(p){
+  if(!p.body) return p;
+  const bpos=planetPositionAt(p.body,simTime);
+  return {x:bpos.x+p.relX, y:bpos.y+p.relY};
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function drawSun(){
+  const s=worldToScreen(SUN_POS.x,SUN_POS.y);
+  const r=Math.max(1.2,SUN_RADIUS/camera.metersPerPixel);
+  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
+  const grad=fctx.createRadialGradient(s.x-r*0.3,s.y-r*0.3,r*0.05,s.x,s.y,r);
+  grad.addColorStop(0,shadeColor('#ffb020',0.3));
+  grad.addColorStop(1,shadeColor('#ffb020',-0.15));
+  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.fillStyle=grad; fctx.fill();
+  if(r>2){ fctx.lineWidth=1; fctx.strokeStyle='rgba(255,255,255,0.12)'; fctx.stroke(); }
+  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText('Sun',s.x+r+4,s.y+4); }
+}
+
+function drawOrbitPath(p){
+  if(camera.metersPerPixel<20000) return; // only visible at medium/system zoom
+  const s=worldToScreen(0,0);
+  const r=p.distance/camera.metersPerPixel;
+  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
+  fctx.strokeStyle='rgba(255,255,255,0.08)'; fctx.lineWidth=1; fctx.stroke();
+}
+
+function drawSOICircle(p,t){
+  const pos=planetPositionAt(p,t);
+  const s=worldToScreen(pos.x,pos.y);
+  const r=p.soi/camera.metersPerPixel;
+  if(r<3||r>Math.max(flightCanvas.clientWidth,flightCanvas.clientHeight)*6) return;
+  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
+  fctx.setLineDash([8,6]);
+  fctx.strokeStyle='rgba(120,200,255,0.28)'; fctx.lineWidth=1; fctx.stroke();
+  fctx.setLineDash([]);
+  if(r>60){ fctx.fillStyle='rgba(120,200,255,0.55)'; fctx.font='10px sans-serif'; fctx.fillText(p.name+' SOI',s.x+r+4,s.y); }
+}
+function hexToRgba(hex,a){
+  const c=hex.replace('#','');
+  const num=parseInt(c,16);
+  const r=(num>>16)&0xff,g=(num>>8)&0xff,b=num&0xff;
+  return `rgba(${r},${g},${b},${a})`;
+}
+function drawPlanet(p,t,viewerPos){
+  const pos=planetPositionAt(p,t);
+  const s=worldToScreen(pos.x,pos.y);
+  const r=Math.max(1.2,p.radius/camera.metersPerPixel);
+  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
+
+  if(p.atmo){
+    const atmoR=p.solid?r*(1+(p.atmoFrac||0)):r*1.08;
+    const glow=fctx.createRadialGradient(s.x,s.y,r*0.85,s.x,s.y,atmoR);
+    glow.addColorStop(0,'rgba(180,210,255,0.20)');
+    glow.addColorStop(1,'rgba(180,210,255,0)');
+    fctx.beginPath(); fctx.arc(s.x,s.y,atmoR,0,Math.PI*2); fctx.fillStyle=glow; fctx.fill();
+  }
+  fctx.save();
+  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.closePath(); fctx.clip();
+  const base=fctx.createRadialGradient(s.x-r*0.32,s.y-r*0.32,r*0.08,s.x,s.y,r*1.05);
+  base.addColorStop(0,shadeColor(p.color,0.35));
+  base.addColorStop(0.55,p.color);
+  base.addColorStop(1,shadeColor(p.color,-0.35));
+  fctx.fillStyle=base; fctx.fillRect(s.x-r,s.y-r,r*2,r*2);
+  if(!p.solid){
+    fctx.strokeStyle='rgba(0,0,0,0.08)';
+    for(let i=-4;i<=4;i++){
+      fctx.lineWidth=r*0.09;
+      fctx.beginPath(); fctx.moveTo(s.x-r,s.y+i*r*0.2); fctx.lineTo(s.x+r,s.y+i*r*0.2+(i%2===0?r*0.03:-r*0.03)); fctx.stroke();
+    }
+  } else if(p.groundColor){
+    const R0=45,R1=1400;
+    const closeness=Math.max(0,Math.min(1,(r-R0)/(R1-R0)));
+    if(closeness>0.01){
+      const dx=viewerPos.x-pos.x, dy=viewerPos.y-pos.y;
+      const dlen=Math.hypot(dx,dy)||1;
+      const nx=dx/dlen, ny=dy/dlen;
+      const subX=s.x+nx*r, subY=s.y-ny*r;
+      const gg=fctx.createRadialGradient(subX,subY,0,subX,subY,r*(0.9+1.1*closeness));
+      gg.addColorStop(0,hexToRgba(p.groundColor,0.95*closeness));
+      gg.addColorStop(0.5,hexToRgba(p.groundColor,0.55*closeness));
+      gg.addColorStop(0.8,hexToRgba(p.groundColor,0.18*closeness));
+      gg.addColorStop(1,hexToRgba(p.groundColor,0));
+      fctx.fillStyle=gg;
+      fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.fill();
+    }
+  }
+  fctx.restore();
+  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
+  fctx.lineWidth=1; fctx.strokeStyle='rgba(255,255,255,0.14)'; fctx.stroke();
+  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText(p.name,s.x+r+4,s.y+4); }
+}
+
+// Draw a concrete trapezoid launch pad on Earth's surface (outward-from-Sun side)
+function drawLaunchPad(){
+  const earthPos=planetPositionAt(EARTH,simTime);
+  const earthDist=Math.hypot(earthPos.x,earthPos.y)||EARTH.distance;
+  const nx=earthPos.x/earthDist; // outward unit vector (Sun → Earth)
+  const ny=earthPos.y/earthDist;
+  const tx=-ny, ty=nx;          // tangential unit vector
+
+  const PAD_H=LAUNCH_PAD_HEIGHT; // protrudes above surface
+  const PAD_EMBED=4;// embedded below surface
+  const PAD_B=42;   // base width (world units)
+  const PAD_T=28;   // top width (world units)
+
+  // Surface centre of the pad
+  const cx=earthPos.x+nx*EARTH.radius;
+  const cy=earthPos.y+ny*EARTH.radius;
+
+  // Cull if off-screen or too tiny
+  const ps=worldToScreen(cx,cy);
+  const CW=flightCanvas.clientWidth,CH=flightCanvas.clientHeight;
+  const rPix=Math.max(PAD_B,PAD_H+PAD_EMBED)/camera.metersPerPixel;
+  if(rPix<0.4) return;
+  if(ps.x<-rPix*4||ps.x>CW+rPix*4||ps.y<-rPix*4||ps.y>CH+rPix*4) return;
+
+  // Four corners in world-space → screen-space
+  // Top face (PAD_H above surface, narrower)
+  const TL=worldToScreen(cx+nx*PAD_H+tx*(-PAD_T/2), cy+ny*PAD_H+ty*(-PAD_T/2));
+  const TR=worldToScreen(cx+nx*PAD_H+tx*(PAD_T/2),  cy+ny*PAD_H+ty*(PAD_T/2));
+  // Base (PAD_EMBED below surface, wider — gives the classic trapezoid silhouette)
+  const BL=worldToScreen(cx-nx*PAD_EMBED+tx*(-PAD_B/2), cy-ny*PAD_EMBED+ty*(-PAD_B/2));
+  const BR=worldToScreen(cx-nx*PAD_EMBED+tx*(PAD_B/2),  cy-ny*PAD_EMBED+ty*(PAD_B/2));
+
+  // Main body
+  fctx.beginPath();
+  fctx.moveTo(BL.x,BL.y); fctx.lineTo(BR.x,BR.y);
+  fctx.lineTo(TR.x,TR.y); fctx.lineTo(TL.x,TL.y);
+  fctx.closePath();
+  const grad=fctx.createLinearGradient(TL.x,TL.y,BL.x,BL.y);
+  grad.addColorStop(0,'#a8b0b8');
+  grad.addColorStop(0.3,'#808890');
+  grad.addColorStop(1,'#484e56');
+  fctx.fillStyle=grad; fctx.fill();
+  fctx.strokeStyle='rgba(255,255,255,0.18)'; fctx.lineWidth=1; fctx.stroke();
+
+  // Top surface stripe markings (yellow dashes) — only when visible at close zoom
+  if(rPix>4){
+    fctx.save();
+    fctx.strokeStyle='#ffcc00';
+    fctx.lineWidth=Math.max(1,rPix*0.07);
+    fctx.setLineDash([rPix*0.22,rPix*0.12]);
+    fctx.beginPath(); fctx.moveTo(TL.x,TL.y); fctx.lineTo(TR.x,TR.y); fctx.stroke();
+    fctx.setLineDash([]);
+    fctx.restore();
+  }
+}
+
+function drawShipTrail(sh){
+  if(sh.trail.length<2) return;
+  const active=sh===activeShip();
+  fctx.strokeStyle=active?'rgba(255,69,0,0.55)':'rgba(140,140,140,0.4)';
+  fctx.lineWidth=active?1.4:1;
+  fctx.beginPath();
+  sh.trail.forEach((p,i)=>{
+    const wp=trailPointWorldPos(p);
+    const s=worldToScreen(wp.x,wp.y);
+    if(i===0) fctx.moveTo(s.x,s.y); else fctx.lineTo(s.x,s.y);
+  });
+  fctx.stroke();
+}
+
+// Draw the Nav Beacon predicted 15-second ballistic path in bright green.
+function drawNavBeaconPath(){
+  if(!navBeaconPath||navBeaconPath.length<2) return;
+  fctx.save();
+  fctx.strokeStyle='rgba(0,220,80,0.82)';
+  fctx.lineWidth=1.8;
+  fctx.setLineDash([7,5]);
+  fctx.beginPath();
+  navBeaconPath.forEach((p,i)=>{
+    const wp=trailPointWorldPos(p);
+    const s=worldToScreen(wp.x,wp.y);
+    if(i===0) fctx.moveTo(s.x,s.y); else fctx.lineTo(s.x,s.y);
+  });
+  fctx.stroke();
+  fctx.setLineDash([]);
+  // Draw small dot at the 15-second end
+  const last=navBeaconPath[navBeaconPath.length-1];
+  const lastWp=trailPointWorldPos(last);
+  const ls=worldToScreen(lastWp.x,lastWp.y);
+  fctx.fillStyle='rgba(0,255,100,0.9)';
+  fctx.beginPath(); fctx.arc(ls.x,ls.y,4,0,Math.PI*2); fctx.fill();
+  fctx.restore();
+}
+
+// Crosshair marker at the world position where the planned burn will happen —
+// shown whether the ship is still coasting toward it or already there, so the
+// player has something to aim their attention at before the countdown ends.
+function drawNavBurnMarker(){
+  if(!navDeltaV||!navDeltaV.burnPos||!navTargetPlanet) return;
+  const s=worldToScreen(navDeltaV.burnPos.x,navDeltaV.burnPos.y);
+  fctx.save();
+  fctx.strokeStyle='rgba(255,205,0,0.9)';
+  fctx.fillStyle='rgba(255,205,0,0.9)';
+  fctx.lineWidth=1.6;
+  const R=7;
+  fctx.beginPath();
+  fctx.moveTo(s.x-R,s.y); fctx.lineTo(s.x-2,s.y);
+  fctx.moveTo(s.x+2,s.y); fctx.lineTo(s.x+R,s.y);
+  fctx.moveTo(s.x,s.y-R); fctx.lineTo(s.x,s.y-2);
+  fctx.moveTo(s.x,s.y+2); fctx.lineTo(s.x,s.y+R);
+  fctx.stroke();
+  fctx.beginPath(); fctx.arc(s.x,s.y,R,0,Math.PI*2); fctx.stroke();
+  fctx.font='bold 10px sans-serif';
+  fctx.textAlign='center'; fctx.textBaseline='bottom';
+  fctx.fillText('BURN',s.x,s.y-R-3);
+  fctx.restore();
+}
+
+// Nav guidance while a target planet is set: text panel showing a countdown
+// before the burn window opens, then — once it's open — an on-screen arrow
+// pointing toward the remaining Δv plus a live "Δv left" readout, switching
+// to an "on course" state once the burn is complete.
+function drawNavArrow(sh){
+  if(!navDeltaV||!navTargetPlanet||!sh) return;
+  const tStr=fmtDuration(navDeltaV.interceptT);
+  const panel=el('navArrowPanel');
+
+  // The plan says WHEN to burn, not just how — show a countdown until that
+  // moment; burning early would just pay the Δv this solver avoided.
+  const waitLeft=navDeltaV.burnSimTime-simTime;
+  if(waitLeft>1){
+    const magStr=(navDeltaV.mag>=1000?(navDeltaV.mag/1000).toFixed(1)+'k':Math.round(navDeltaV.mag))+' u/s';
+    panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
+      +'Coasting — burn in <b>'+fmtDuration(waitLeft)+'</b>  '
+      +'(planned Δv: '+magStr+', transfer ~'+tStr+')'
+      +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
+    panel.style.display='block';
+    return; // no arrow yet — nothing to execute right now
+  }
+
+  // Once the burn reads as done, stay done. The checks below compare current
+  // velocity against the static burn target, which only makes sense while
+  // actively thrusting — during the post-burn coast, velocity legitimately
+  // drifts from gravity, and re-deriving "remaining Δv" would spuriously flip
+  // the panel back to BURN NOW even though the ship is still correctly forced
+  // onto navPostBurnCoastPath.
+  if(navBurnDone){
+    panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
+      +'<b style="color:#00ff66">On course</b> — burn complete, intercept in ~'+tStr
+      +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
+    panel.style.display='block';
+    return;
+  }
+
+  // The window is open. Capture the absolute velocity we're aiming for
+  // exactly once, the first frame we're ready — then every subsequent frame
+  // we compare the ship's CURRENT velocity against that fixed target. The
+  // difference is what's actually left to add, so as the player thrusts
+  // this shrinks toward zero in real time instead of sitting frozen at the
+  // originally-planned number.
+  if(!navBurnTargetVel){
+    navBurnTargetVel={x:sh.vel.x+navDeltaV.dvx, y:sh.vel.y+navDeltaV.dvy};
+  }
+  const remDvx=navBurnTargetVel.x-sh.vel.x;
+  const remDvy=navBurnTargetVel.y-sh.vel.y;
+  const remMag=Math.hypot(remDvx,remDvy);
+  const origMag=Math.max(navDeltaV.mag,0.001);
+  const pctDone=Math.max(0,Math.min(100,100*(1-remMag/origMag)));
+  const remStr=(remMag>=1000?(remMag/1000).toFixed(1)+'k':Math.round(remMag))+' u/s';
+
+  // Close enough — snap velocity exactly onto the planned target rather than
+  // leaving the last few u/s to the player/integrator. Cheap fix for
+  // high-timewarp jitter: stops a near-miss burn from snowballing into a
+  // badly off-course coast.
+  const BURN_DONE_THRESHOLD=5;
+  if(remMag<BURN_DONE_THRESHOLD){
+    sh.vel.x=navBurnTargetVel.x; sh.vel.y=navBurnTargetVel.y;
+    // First frame the burn completes: freeze a coast plan to the intercept
+    // and start forcing the ship onto it (see loop()). The velocity snap
+    // above only fixes the starting condition — integration error still
+    // accumulates over the coast at high warp, so the post-burn leg needs
+    // the same forced-path treatment as the pre-burn coast.
+    if(!navBurnDone){
+      navBurnDone=true;
+      const arrivalT=navDeltaV.burnSimTime+navDeltaV.interceptT;
+      navPostBurnCoastPath=computeNavPostBurnCoastPath(sh, simTime, arrivalT, navTargetPlanet);
+    }
+    panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
+      +'<b style="color:#00ff66">On course</b> — burn complete, intercept in ~'+tStr
+      +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
+    panel.style.display='block';
+    return; // no arrow needed — target velocity reached
+  }
+
+  const ss=worldToScreen(sh.pos.x,sh.pos.y);
+
+  // Direction of the REMAINING delta-v in world space, projected to screen space.
+  // On screen Y is flipped and we apply camera rotation.
+  const a=camera.angle;
+  const cos=Math.cos(a), sin=Math.sin(a);
+  // world (dx, dy) → screen (sdx, sdy): sdx = dx*cos - (-dy)*sin = dx*cos + dy*sin
+  //                                       sdy = dx*sin + (-dy)*cos = dx*sin - dy*cos
+  const sdx= remDvx*cos + remDvy*sin;
+  const sdy= remDvx*sin - remDvy*cos;
+  const slen=Math.hypot(sdx,sdy)||1;
+  const snx=sdx/slen, sny=sdy/slen;
+
+  // Draw a ring around the ship and the arrow on the ring
+  const RING=52;
+  const cx=ss.x+snx*RING, cy=ss.y+sny*RING;
+
+  fctx.save();
+  // Ring
+  fctx.beginPath(); fctx.arc(ss.x,ss.y,RING,0,Math.PI*2);
+  fctx.strokeStyle='rgba(0,220,80,0.35)'; fctx.lineWidth=1.2; fctx.stroke();
+
+  // Arrow shaft + head
+  const SHAFT=28, HEAD=10;
+  fctx.strokeStyle='rgba(0,255,100,0.92)'; fctx.lineWidth=2.5;
+  fctx.lineCap='round';
+  const bx=cx-snx*SHAFT, by=cy-sny*SHAFT;
+  fctx.beginPath(); fctx.moveTo(bx,by); fctx.lineTo(cx,cy); fctx.stroke();
+  // Arrowhead
+  const perp={x:-sny,y:snx};
+  fctx.fillStyle='rgba(0,255,100,0.92)';
+  fctx.beginPath();
+  fctx.moveTo(cx+snx*HEAD, cy+sny*HEAD);
+  fctx.lineTo(cx-snx*6+perp.x*6, cy-sny*6+perp.y*6);
+  fctx.lineTo(cx-snx*6-perp.x*6, cy-sny*6-perp.y*6);
+  fctx.closePath(); fctx.fill();
+
+  // Magnitude label next to arrow tip — shows what's LEFT to add, live.
+  fctx.font='bold 11px sans-serif';
+  fctx.textAlign='center'; fctx.textBaseline='middle';
+  const labelOff=20;
+  const labelX=cx+snx*labelOff, labelY=cy+sny*labelOff;
+  const labelText='Δv '+remStr+' left';
+  const tw=fctx.measureText(labelText).width;
+  fctx.fillStyle='rgba(0,40,0,0.75)';
+  fctx.fillRect(labelX-tw/2-4, labelY-8, tw+8, 16);
+  fctx.fillStyle='#00ff66';
+  fctx.fillText(labelText, labelX, labelY);
+  fctx.restore();
+
+  // Update the text info panel below the controls bar with live progress.
+  panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
+    +'<b>BURN NOW</b> — Δv remaining: <b>'+remStr+'</b> ('+pctDone.toFixed(0)+'% done)  intercept in ~'+tStr
+    +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
+  panel.style.display='block';
+}
+
+function drawShip(sh){
+  const s=worldToScreen(sh.pos.x,sh.pos.y);
+  const active=sh===activeShip();
+  const mpp=camera.metersPerPixel;
+  // worldToScreen flips Y then applies a CCW rotation by camera.angle.
+  // Working through the matrix, the sprite must be rotated by (sh.angle + camera.angle)
+  // so the nose direction in world-space matches the thrust direction (sin angle, cos angle).
+  const relAngle=sh.angle+camera.angle;
+  if(mpp<1.2){
+    const detailScale=CELL_WORLD/mpp;
+    fctx.save();
+    fctx.translate(s.x,s.y);
+    fctx.rotate(relAngle);
+    const dw=sh.sprite.cellsW*detailScale, dh=sh.sprite.cellsH*detailScale;
+    fctx.drawImage(sh.sprite.canvas,-sh.sprite.comXc*detailScale,-sh.sprite.comYc*detailScale,dw,dh);
+    if(sh.engineOn){
+      fctx.fillStyle='rgba(255,140,60,0.9)';
+      fctx.beginPath();
+      const halfW=0.35*detailScale;
+      const flameLen=(1.1+Math.random()*0.6)*detailScale;
+      const bottomY=(sh.sprite.cellsH-sh.sprite.comYc)*detailScale;
+      fctx.moveTo(-halfW,bottomY); fctx.lineTo(halfW,bottomY); fctx.lineTo(0,bottomY+flameLen);
+      fctx.closePath(); fctx.fill();
+    }
+    if(sh.chuteDeployed){
+      fctx.strokeStyle='rgba(230,230,230,0.85)';
+      fctx.lineWidth=Math.max(1,detailScale*0.06);
+      const topY=-sh.sprite.comYc*detailScale-detailScale*1.4;
+      fctx.beginPath(); fctx.arc(0,topY,detailScale*1.6,Math.PI*0.15,Math.PI*0.85); fctx.stroke();
+      fctx.beginPath(); fctx.moveTo(-detailScale*1.5,topY-detailScale*0.2); fctx.lineTo(-detailScale*0.3,-sh.sprite.comYc*detailScale); fctx.stroke();
+      fctx.beginPath(); fctx.moveTo(detailScale*1.5,topY-detailScale*0.2); fctx.lineTo(detailScale*0.3,-sh.sprite.comYc*detailScale); fctx.stroke();
+    }
+    fctx.restore();
+  } else if(mpp<400){
+    fctx.save(); fctx.translate(s.x,s.y); fctx.rotate(relAngle);
+    fctx.fillStyle=active?'#FF4500':'#999';
+    fctx.beginPath(); fctx.moveTo(0,-7); fctx.lineTo(5,6); fctx.lineTo(-5,6);
+    fctx.closePath(); fctx.fill();
+    fctx.restore();
+    if(!active){ fctx.fillStyle='rgba(255,255,255,0.6)'; fctx.font='10px sans-serif'; fctx.fillText(sh.name,s.x+9,s.y-9); }
+  } else {
+    fctx.fillStyle=active?'#FF4500':'#999';
+    fctx.beginPath(); fctx.arc(s.x,s.y,2.5,0,Math.PI*2); fctx.fill();
+  }
+
+  // Draw mouse-pull indicator when cheat is active for this ship
+  if(active&&cheats.mousePull&&flightMouseDown){
+    const wmouse=screenToWorld(flightMousePos.x,flightMousePos.y);
+    const ms=worldToScreen(wmouse.x,wmouse.y);
+    fctx.save();
+    fctx.strokeStyle='rgba(255,200,0,0.7)';
+    fctx.lineWidth=1.5;
+    fctx.setLineDash([4,4]);
+    fctx.beginPath(); fctx.moveTo(s.x,s.y); fctx.lineTo(ms.x,ms.y); fctx.stroke();
+    fctx.setLineDash([]);
+    fctx.fillStyle='rgba(255,200,0,0.9)';
+    fctx.beginPath(); fctx.arc(ms.x,ms.y,4,0,Math.PI*2); fctx.fill();
+    fctx.restore();
+  }
+}
+
+// Visual atmosphere depth for background tint/star-fade (0=space, 1=surface).
+// Deliberately a separate curve (exponent 1.4) from the physics drag density
+// in integrate() (exponent 1.6) — this one only drives color blending and is
+// tuned to fade in smoothly rather than match the drag ramp.
+function getAtmoDensity(pos,p){
+  const ppos=planetPositionAt(p,simTime);
+  const rdist=Math.hypot(pos.x-ppos.x,pos.y-ppos.y);
+  if(!p.atmo) return 0;
+  if(p.solid){
+    const top=p.radius*(1+(p.atmoFrac||0));
+    if(rdist>=top) return 0;
+    const depth=Math.max(0,Math.min(1,(top-rdist)/(top-p.radius)));
+    return Math.pow(depth,1.4);
+  } else {
+    if(rdist>=p.radius) return 0;
+    const depth=1-rdist/p.radius;
+    return Math.min(1,depth*1.4);
+  }
+}
+
+function render(){
+  const {w:CW,h:CH}=fitCanvasToDisplay(flightCanvas,fctx);
+
+  // --- Atmosphere background ---
+  let starFade=1; // 1=full stars, 0=no stars
+  const activeSh=activeShip();
+  let bgR=20,bgG=20,bgB=20; // default near-black space
+  if(activeSh){
+    for(const p of PLANETS){
+      if(!p.atmo||!p.atmoColor) continue;
+      const density=getAtmoDensity(activeSh.pos,p);
+      if(density>0){
+        const ac=p.atmoColor.replace('#','');
+        const aNum=parseInt(ac,16);
+        const ar=(aNum>>16)&0xff, ag=(aNum>>8)&0xff, ab=aNum&0xff;
+        bgR=Math.round(20+(ar-20)*density);
+        bgG=Math.round(20+(ag-20)*density);
+        bgB=Math.round(20+(ab-20)*density);
+        starFade=Math.max(0,1-density*2);
+        break;
+      }
+    }
+  }
+  fctx.fillStyle=`rgb(${bgR},${bgG},${bgB})`; fctx.fillRect(0,0,CW,CH);
+
+  // --- Stars (fade out inside atmosphere) ---
+  if(starFade>0.01){
+    const dpr=window.devicePixelRatio||1;
+    const pxW=flightCanvas.width, pxH=flightCanvas.height;
+    if(starLayerW!==pxW||starLayerH!==pxH) renderStarLayer(pxW,pxH,dpr);
+    fctx.save();
+    fctx.setTransform(1,0,0,1,0,0); // blit in raw device pixels, ignoring the dpr transform
+    fctx.globalAlpha=starFade;
+    fctx.drawImage(starLayer,0,0);
+    fctx.restore();
+  }
+
+  PLANETS.forEach(drawOrbitPath);
+  PLANETS.forEach(p=>drawSOICircle(p,simTime));
+  drawSun();
+  PLANETS.forEach(p=>drawPlanet(p,simTime,{x:camera.x,y:camera.y}));
+  drawLaunchPad();
+  ships.forEach(drawShipTrail);
+  if(cheats.navBeacon) drawNavBeaconPath();
+  if(cheats.navBeacon&&navDeltaV) drawNavBurnMarker();
+  ships.forEach(drawShip);
+  if(cheats.navBeacon&&activeSh&&activeSh.status==='flying') drawNavArrow(activeSh);
+
+  const sh=activeSh;
+  if(sh){
+    const distS=Math.hypot(sh.pos.x-SUN_POS.x,sh.pos.y-SUN_POS.y)-SUN_RADIUS;
+    hud.altS.textContent=fmtDist(distS);
+    if(sh._domBody){
+      const ppos=planetPositionAt(sh._domBody,simTime);
+      const pVx=-sh._domBody.omega*ppos.y;
+      const pVy= sh._domBody.omega*ppos.x;
+      const speed=Math.hypot(sh.vel.x-pVx,sh.vel.y-pVy);
+      hud.speed.textContent=speed.toFixed(1)+' u/s';
+      const alt=Math.hypot(sh.pos.x-ppos.x,sh.pos.y-ppos.y)-sh._domBody.radius;
+      hud.altLabel.textContent='Alt ('+sh._domBody.name+')';
+      hud.alt.textContent=fmtDist(alt);
+      hud.soi.textContent=sh._domBody.name+(sh._inAtmo?' — atmosphere':'');
+    } else {
+      const speed=Math.hypot(sh.vel.x,sh.vel.y);
+      hud.speed.textContent=speed.toFixed(1)+' u/s';
+      hud.altLabel.textContent='Altitude';
+      hud.alt.textContent='-';
+      hud.soi.textContent='Sun (interplanetary)';
+    }
+    hud.fuel.textContent=cheats.infiniteFuel?'∞':(sh.fuelCap?Math.round(100*sh.fuel/sh.fuelCap)+'%':'0%');
+
+    if(sh.status==='landed'){ hud.status.textContent=sh.statusMsg; hud.status.className='status-land'; }
+    else if(sh.status==='crashed'){ hud.status.textContent=sh.statusMsg; hud.status.className='status-crash'; }
+    else { hud.status.textContent=''; hud.status.className=''; }
+  } else {
+    hud.speed.textContent='0 u/s'; hud.alt.textContent='-'; hud.altS.textContent='-';
+    hud.soi.textContent='-'; hud.fuel.textContent='0%';
+    hud.status.textContent=ships.length?'':'No active ship — build and launch, or select one from the list.';
+    hud.status.className='';
+  }
+}
+function fmtDist(v){
+  if(Math.abs(v)>=1000000) return (v/1000000).toFixed(2)+'M u';
+  if(Math.abs(v)>=1000) return (v/1000).toFixed(1)+'k u';
+  return Math.round(v)+' u';
+}
+function fmtDuration(secs){
+  secs=Math.max(0,secs);
+  if(secs>=86400) return (secs/86400).toFixed(1)+'d';
+  if(secs>=3600) return (secs/3600).toFixed(1)+'h';
+  if(secs>=60) return (secs/60).toFixed(0)+'m';
+  return secs.toFixed(0)+'s';
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+let frameCount=0;
+let lastT=performance.now();
+// ============================================================
+// BACKGROUND MUSIC — 3 bytebeat "songs" synthesized live in an
+// AudioWorklet and crossfaded based on where the active ship is
+// (in atmosphere / in a planet's SOI / interplanetary). Generating
+// audio from a tiny formula instead of shipping audio files is the
+// whole point — near-zero bytes for a full adaptive soundtrack.
+// ============================================================
+const BYTEBEAT_WORKLET_SRC = `
+function byteToSample(v){ return (((v|0)&255)-128)/128; }
+// 32kHz stereo bytebeat — played while a ship is inside a planet's atmosphere.
+function atmoTrack(tIn){
+  let t = tIn/4;
+  const a=(t*((t&4096?t%65536<59392?7:t&7:16)+(1&t>>14))>>(3&-t>>(t&2048?2:10)))%256*(1-t%2**((11-'10'[(t>>14)%2]))/(t&16384?4096:2048));
+  const c=64*Math.sin((t%2**16<59392?1.4:0)*Math.sqrt(t%2**12));
+  const d=(t*Math.random())%256*(1-t%2048/2548)/10;
+  t -= t%2;
+  const T=t;
+  const e=(T*(t^t/6%64))%256*(1-t%2048/2048)*'0010'[(t>>11)%4];
+  return [byteToSample(a/3.5+(c/2-170)+d+(e/3.99)), byteToSample(a/4.5+(c/2-160)+d+(e/4.01))];
+}
+// 48kHz mono bytebeat — played while coasting between planets (no SOI).
+function interplanetaryTrack(t){
+  const v=((((82+9*(t>>18&1))*t/9>>3^255*t>>11&t>>3)&127)*(t>>11&223&~t>>9&15)/9+(((3364383129>>(t>>14&28)&15)<<(~t>>9&5)-(t>>20&1))*t>>7&54)*!!(t>>20&3))*!!(~t>>15&15)+(((3+(t>>18&1))*t>>5&95)+((t^6*t)*85>>9&63)*(t>>15&1))*(~t>>12&7)/6+((~t>>(t>>7)&192)>>(t>>9));
+  return byteToSample(v);
+}
+// 48kHz mono bytebeat — played while inside a planet's SOI but above the atmosphere.
+function soiTrack(t){
+  const v=((t&t*91/(t>>16&1?10:12-3*(t>>17&1))/15&255)+!!(t>>20&3)*((t*6^t)*811>>9&63))*(~t>>6-(t>>14&1)&127)/128*!!(~t>>14&63)+(63-(t>>16&15)&((~t>>14&7?30-10*((t>>17&1)+(t>>11&1)-(t>>13&1)*(t>>19&3)):27-2*(t>>13&1))*t/40^t>>8))+!!(t>>21&3)*!(t>>11&7)*(t>>7&15)*159;
+  return byteToSample(v);
+}
+const FADE_SECONDS = 1.6;
+class BytebeatProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors(){
+    return [{name:'volume', defaultValue:0.35, minValue:0, maxValue:1, automationRate:'k-rate'}];
+  }
+  constructor(){
+    super();
+    this.gains={atmo:0,interplanetary:1,soi:0};
+    this.targetGains={atmo:0,interplanetary:1,soi:0};
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0;
+    this.fadeStep=1/(FADE_SECONDS*sampleRate);
+    this.port.onmessage=(e)=>{
+      const d=e.data;
+      if(d&&d.type==='state'){
+        this.targetGains={atmo:0,interplanetary:0,soi:0};
+        this.targetGains[d.value]=1;
+      }
+    };
+  }
+  process(inputs,outputs,parameters){
+    const out=outputs[0];
+    const L=out[0], R=out.length>1?out[1]:out[0];
+    const volArr=parameters.volume;
+    const vol=volArr.length>1?null:volArr[0];
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate;
+    for(let i=0;i<L.length;i++){
+      const v=vol!==null?vol:volArr[i];
+      for(const k in this.gains){
+        if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
+        else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
+      }
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi;
+      let l=0,r=0;
+      if(this.gains.atmo>0.0005){
+        const s=atmoTrack(Math.floor(this.tfAtmo));
+        l+=s[0]*this.gains.atmo; r+=s[1]*this.gains.atmo;
+      }
+      if(this.gains.interplanetary>0.0005){
+        const s=interplanetaryTrack(Math.floor(this.tfInter))*this.gains.interplanetary;
+        l+=s; r+=s;
+      }
+      if(this.gains.soi>0.0005){
+        const s=soiTrack(Math.floor(this.tfSoi))*this.gains.soi;
+        l+=s; r+=s;
+      }
+      L[i]=Math.max(-1,Math.min(1,l*v));
+      R[i]=Math.max(-1,Math.min(1,r*v));
+    }
+    return true;
+  }
+}
+registerProcessor('bytebeat-processor', BytebeatProcessor);
+`;
+let musicCtx=null, musicNode=null, musicVolume=0.35, musicLastState=null, musicStarting=false;
+function currentMusicState(){
+  const sh=activeShip();
+  if(sh&&sh.status==='flying'){
+    if(sh._domBody) return sh._inAtmo?'atmo':'soi';
+    return 'interplanetary';
+  }
+  return 'interplanetary';
+}
+function updateMusicState(){
+  if(!musicNode) return;
+  const st=currentMusicState();
+  if(st!==musicLastState){
+    musicLastState=st;
+    musicNode.port.postMessage({type:'state',value:st});
+  }
+}
+async function startMusicEngine(){
+  if(musicCtx||musicStarting) return;
+  musicStarting=true;
+  try{
+    musicCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const blob=new Blob([BYTEBEAT_WORKLET_SRC],{type:'application/javascript'});
+    const url=URL.createObjectURL(blob);
+    await musicCtx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    musicNode=new AudioWorkletNode(musicCtx,'bytebeat-processor',{outputChannelCount:[2]});
+    musicNode.parameters.get('volume').value=musicVolume;
+    musicNode.connect(musicCtx.destination);
+    musicLastState=null;
+    updateMusicState();
+  }catch(err){
+    console.warn('Background music unavailable:',err);
+  }
+  musicStarting=false;
+}
+function setMusicVolume(v){
+  musicVolume=Math.max(0,Math.min(1,v));
+  if(musicNode){
+    const p=musicNode.parameters.get('volume');
+    const now=musicCtx.currentTime;
+    p.cancelScheduledValues(now);
+    p.linearRampToValueAtTime(musicVolume,now+0.05);
+  }
+}
+// Autoplay policies require a user gesture before audio can start —
+// kick things off on the first click/keypress anywhere in the page.
+function primeMusicOnGesture(){
+  startMusicEngine();
+  if(musicCtx&&musicCtx.state==='suspended') musicCtx.resume();
+  window.removeEventListener('pointerdown',primeMusicOnGesture);
+  window.removeEventListener('keydown',primeMusicOnGesture);
+}
+window.addEventListener('pointerdown',primeMusicOnGesture);
+window.addEventListener('keydown',primeMusicOnGesture);
+const volSliderEl=el('volSlider'), volIconEl=el('volIcon');
+if(volSliderEl){
+  volSliderEl.value=Math.round(musicVolume*100);
+  volSliderEl.addEventListener('input',e=>{
+    const pct=parseInt(e.target.value,10);
+    setMusicVolume(pct/100);
+    if(volIconEl) volIconEl.textContent=pct===0?'🔇':(pct<50?'🔉':'🔊');
+    if(!musicCtx) startMusicEngine();
+  });
+}
+
+function loop(now){
+  updateMusicState();
+  const realDt=Math.min(0.05,(now-lastT)/1000);
+  lastT=now;
+
+  const sh=activeShip();
+  if(sh&&sh.status==='flying'&&warp<=1){
+    const rotSpeed=1.6;
+    if(keys['arrowleft']) sh.angle-=rotSpeed*realDt;
+    if(keys['arrowright']) sh.angle+=rotSpeed*realDt;
+  }
+
+  // --- SOI entry/exit detection: reset warp to 1× as QoL (player can re-raise after) ---
+  ships.forEach(s=>{
+    if(s._prevDomBody===undefined) s._prevDomBody=s._domBody;
+    if(s.status==='flying'&&s._domBody!==s._prevDomBody){
+      if(warp>1) setWarp(1);
+    }
+    s._prevDomBody=s._domBody;
+  });
+
+  // Nav Beacon: auto-drop timewarp just before the planned burn window. The
+  // plan is a single frozen (time, Δv) pair, so a big warp step could carry
+  // the ship straight through the moment without the player ever getting a
+  // chance to execute it. Same idea as the SOI-transition drop above.
+  if(cheats.navBeacon&&navDeltaV&&navTargetPlanet&&sh&&sh.status==='flying'&&warp>1&&!navBurnWarpDropped){
+    const projected=simTime+realDt*warp;
+    if(projected>=navDeltaV.burnSimTime){
+      setWarp(1);
+      navBurnWarpDropped=true;
+      showToast('Nav Beacon: approaching the planned burn window for '+navTargetPlanet.name+'.');
+    }
+  }
+
+  // Nav Beacon: lock out 1× while a coast is being force-interpolated. 1× is
+  // the only warp where the engine can turn on, and manual flight is
+  // meaningless while the plan overwrites the ship's position every frame —
+  // it would just invite the player to think they're steering. Keep warp at
+  // 5×+ for the two forced legs; 1× is only available during the actual burn.
+  const NAV_FORCED_MIN_WARP=5;
+  if(activeNavForcedPath()&&warp<NAV_FORCED_MIN_WARP) setWarp(NAV_FORCED_MIN_WARP);
+
+  const maxAllowed=computeMaxAllowedWarp();
+  if(warp>maxAllowed) setWarp(largestAllowedLevel(maxAllowed));
+  updateWarpButtonsUI(maxAllowed, activeNavForcedPath()?NAV_FORCED_MIN_WARP:1);
+
+  const simSeconds=realDt*warp;
+  const tStart=simTime;
+  simTime+=simSeconds;
+
+  ships.forEach(s=>{
+    if(s.status==='flying'){
+      stepSimSeconds(s,simSeconds,tStart); pushTrail(s);
+    } else if(s.status==='landed'&&s.landedOnPlanet&&s.landedRelPos){
+      // Wheel driving — rotate the landed position around the planet
+      if(s===activeShip()&&(keys['a']||keys['d'])&&s.parts.some(pp=>PARTS[pp.id].type==='wheel')){
+        const r=Math.hypot(s.landedRelPos.x,s.landedRelPos.y)||1;
+        const dAng=(WHEEL_SPEED*realDt/r)*(keys['d']?1:-1);
+        const cx=s.landedRelPos.x/r, cy=s.landedRelPos.y/r;
+        const nx=cx*Math.cos(dAng)-cy*Math.sin(dAng);
+        const ny=cx*Math.sin(dAng)+cy*Math.cos(dAng);
+        s.landedRelPos={x:nx*r,y:ny*r};
+      }
+      // Keep landed ships glued to their planet as it orbits
+      const ppos=planetPositionAt(s.landedOnPlanet,simTime);
+      s.pos.x=ppos.x+s.landedRelPos.x;
+      s.pos.y=ppos.y+s.landedRelPos.y;
+    }
+  });
+  handleShipCollisions();
+  if(ships.some(s=>s._pendingRemoval)){
+    const activeRef=activeShip();
+    ships=ships.filter(s=>!s._pendingRemoval);
+    activeShipIdx=activeRef?ships.indexOf(activeRef):-1;
+    if(activeShipIdx<0&&ships.length) activeShipIdx=0;
+    updateEngineBtn(); updateChuteBtn(); renderShipList(); renderStagingList(); renderFuelList();
+    shipListDirty=false;
+    saveShips();
+  }
+
+  // Nav Beacon: snap the ship onto the frozen planned coast path each frame.
+  // Fixes timewarp jitter (see computeNavPlanCoastPath) — stepSimSeconds'
+  // approximation can drift from the plan at extreme warp, so we override its
+  // result while coasting (forcing pauses only during the actual burn, which
+  // the player flies for real). We check both tStart and the post-step
+  // simTime because one huge warp step can jump straight past a leg's end;
+  // checking tStart too keeps forcing active through to that end instead of
+  // treating the leg as already over. sampleNavPlanCoastPath() clamps to the
+  // path's last sample, so this always lands the ship on the correct point.
+  const navForcedPath=activeNavForcedPath(tStart)||activeNavForcedPath();
+  if(navForcedPath){
+    const planned=sampleNavPlanCoastPath(navForcedPath,simTime);
+    if(planned){
+      sh.pos.x=planned.x; sh.pos.y=planned.y;
+      sh.vel.x=planned.vx; sh.vel.y=planned.vy;
+    }
+  }
+
+  // Camera follows the active ship, including while landed.
+  // Rotate camera to match ship heading when the cheat is enabled.
+  if(sh&&sh.status!=='crashed'){
+    camera.x=sh.pos.x;
+    camera.y=sh.pos.y;
+    if(cheats.camRotate&&sh.status==='flying'){
+      camera.angle=-sh.angle;
+    } else {
+      camera.angle=0;
+    }
+  } else if(!sh){
+    camera.angle=0;
+  }
+
+  // --- Atmosphere entry: snap zoom in and track previous state ---
+  if(sh&&sh.status==='flying'){
+    const wasInAtmo=sh._prevInAtmo||false;
+    if(!wasInAtmo&&sh._inAtmo){
+      // Just crossed into atmosphere — snap camera to close view
+      camera.metersPerPixel=Math.min(camera.metersPerPixel,ATMO_ZOOM_ENTER_MPP);
+    }
+  }
+  ships.forEach(s=>{ s._prevInAtmo=s._inAtmo; });
+  // Hard-clamp zoom while any flying active ship is in atmosphere
+  if(sh&&sh._inAtmo&&sh.status==='flying'){
+    camera.metersPerPixel=Math.min(camera.metersPerPixel,ATMO_ZOOM_MAX_MPP);
+  }
+  updateZoomButtons();
+
+  // --- Nav Beacon: mark navigation complete on SOI entry ---
+  // Hand control back as soon as the ship actually enters the target
+  // planet's sphere of influence, rather than waiting for atmosphere entry —
+  // that gave the player almost no time to line up a landing. Clearing the
+  // plan here drops the forced coast and the warp lock the same frame, so
+  // the player gets 1× back right away with the whole SOI to work with.
+  if(cheats.navBeacon&&navTargetPlanet&&sh&&sh.status==='flying'
+     &&sh._domBody===navTargetPlanet){
+    showToast('Nav Beacon: entered '+navTargetPlanet.name+'\u2019s sphere of influence — autopilot disengaged.');
+    navTargetPlanet=null; navDeltaV=null; navBurnWarpDropped=false; navBurnTargetVel=null;
+    navPlanCoastPath=[]; navBurnDone=false; navPostBurnCoastPath=[];
+    el('navArrowPanel').style.display='none';
+  }
+
+  // Nav Beacon: detect a missed intercept and clear the stale plan.
+  // If the planned arrival time has passed but the ship is still flying, a
+  // real hit would already have ended 'flying' via normal collision/landing
+  // code — so this was a miss. Without this check the plan gets stuck forever
+  // (burn marked complete, forcing stops once simTime passes arrival, warp
+  // free to drop) with no way forward but re-clicking the planet. Reset it so
+  // the HUD/warp return to normal and Nav Beacon can be re-issued.
+  if(cheats.navBeacon&&navBurnDone&&navDeltaV&&sh&&sh.status==='flying'
+     &&simTime>=navDeltaV.burnSimTime+navDeltaV.interceptT){
+    showToast('Nav Beacon: intercept with '+(navTargetPlanet?navTargetPlanet.name:'target')+' missed — plan cleared.');
+    navTargetPlanet=null; navDeltaV=null; navBurnWarpDropped=false; navBurnTargetVel=null;
+    navPlanCoastPath=[]; navBurnDone=false; navPostBurnCoastPath=[];
+    el('navArrowPanel').style.display='none';
+  }
+
+  // Nav Beacon: the 15s ballistic preview is recomputed every frame from the
+  // ship's current position/velocity (scaled to 15 real-life seconds
+  // regardless of warp). The intercept plan (navDeltaV) is a separate frozen
+  // calculation — it already searched a window of departure times for the
+  // lowest-Δv burn, so recomputing it on a timer would discard that work. It
+  // only changes when the player clicks the planet again.
+  if(cheats.navBeacon){
+    const nsh=activeShip();
+    if(nsh&&nsh.status==='flying'){
+      navBeaconPath=computeNavBeaconPath(nsh,simTime,warp);
+    } else {
+      navBeaconPath=[];
+      if(!nsh){
+        navTargetPlanet=null; navDeltaV=null; navBurnTargetVel=null; navPlanCoastPath=[]; navBurnDone=false; navPostBurnCoastPath=[];
+        el('navArrowPanel').style.display='none';
+      }
+    }
+  } else {
+    if(el('navArrowPanel').style.display!=='none') el('navArrowPanel').style.display='none';
+  }
+
+  frameCount++;
+  if(frameCount%60===0) saveShips();
+
+  if(el('flightScreen').classList.contains('active')){
+    render();
+    if(shipListDirty){ renderShipList(); shipListDirty=false; }
+    renderFuelList();
+  }
+  requestAnimationFrame(loop);
+}
+window.addEventListener('resize',()=>{ drawGrid(); positionShipList(); });
+
+// ---------- Restore flying ships from previous session ----------
+if(loadShips()&&ships.length){
+  activeShipIdx=0;
+  const first=activeShip();
+  camera.x=first.pos.x; camera.y=first.pos.y;
+  camera.metersPerPixel=3000000; // orbit view for restored sessions
+  camera.angle=0;
+  el('buildScreen').classList.remove('active');
+  el('flightScreen').classList.add('active');
+  el('toBuildBtn').style.display='inline-block';
+  mode='flight';
+  el('throttleSlider').value=Math.round(first.throttle*100);
+  hud.throttle.textContent=Math.round(first.throttle*100)+'%';
+  setWarp(1); updateEngineBtn(); updateChuteBtn(); renderShipList(); renderStagingList(); renderFuelList();
+  showToast('Restored '+ships.length+' ship(s) from your last session.');
+}
+
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
