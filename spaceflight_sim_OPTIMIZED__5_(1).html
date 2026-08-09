@@ -43,7 +43,10 @@
   .vol-icon{font-size:14px;width:18px;text-align:center;user-select:none;}
   .vol-ctl input[type=range]{
     -webkit-appearance:none;appearance:none;width:90px;height:4px;border-radius:2px;
-    background:var(--secondary);outline:none;cursor:pointer;
+    background:#9A9A9A;outline:none;cursor:pointer;
+  }
+  body.dark-mode .vol-ctl input[type=range]{
+    background:#C7C7C7;
   }
   .vol-ctl input[type=range]::-webkit-slider-thumb{
     -webkit-appearance:none;appearance:none;width:13px;height:13px;border-radius:50%;
@@ -1800,7 +1803,7 @@ const keys={};
 window.addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   keys[k]=true;
-  if(k==='a'||e.key==='ArrowLeft'||k==='d'||e.key==='ArrowRight') e.preventDefault();
+  if(k==='a'||e.key==='ArrowLeft'||k==='d'||e.key==='ArrowRight'||k==='q'||k==='e') e.preventDefault();
 });
 window.addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 
@@ -3376,8 +3379,8 @@ function loop(now){
   const sh=activeShip();
   if(sh&&sh.status==='flying'&&warp<=1){
     const rotSpeed=1.6;
-    if(keys['arrowleft']) sh.angle-=rotSpeed*realDt;
-    if(keys['arrowright']) sh.angle+=rotSpeed*realDt;
+    if(keys['arrowleft']||keys['q']) sh.angle-=rotSpeed*realDt;
+    if(keys['arrowright']||keys['e']) sh.angle+=rotSpeed*realDt;
   }
 
   // --- SOI entry/exit detection: reset warp to 1× as QoL (player can re-raise after) ---
