@@ -141,9 +141,7 @@
   .status-land{color:var(--ok);}
   .status-crash{color:var(--danger);}
 
-  /* top is set in JS by positionShipList() — it depends on the HUD's actual
-     height, which changes when the TypeEdit cheat panel is toggled, so a
-     fixed offset here would drift out of sync and overlap it. */
+  /* top set in JS by positionShipList() — depends on HUD height, which shifts with the TypeEdit panel */
   .float-ships{left:var(--sp-5);width:206px;max-height:160px;overflow-y:auto;display:none;}
   .ship-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);font-size:11.5px;padding:5px 4px;cursor:pointer;border-bottom:1px solid var(--secondary);}
   .ship-row:last-child{border-bottom:none;}
@@ -403,6 +401,11 @@
         </div>
         <div class="ctl-group"><span class="ctl-label">Rotate ◄ A/D ►</span></div>
         <div class="ctl-group" id="warpGroup"><span class="ctl-label">Warp</span></div>
+        <div class="ctl-group" id="customWarpGroup">
+          <span class="ctl-label">Custom</span>
+          <input type="number" id="customWarpInput" class="te-input" min="0" step="1" placeholder="e.g. 5000000" style="width:96px;">
+          <button class="btn small" id="customWarpBtn">Set</button>
+        </div>
       </div>
     </div>
   </div>
@@ -422,8 +425,7 @@ el('darkModeBtn').onclick=()=>{
   const dark=document.body.classList.toggle('dark-mode');
   el('darkModeBtn').textContent=dark?'☀️ Light Mode':'🌙 Dark Mode';
 };
-// Cached telemetry element refs — render() updates these every frame, so we
-// look them up once instead of calling getElementById per field per frame.
+// Cached telemetry element refs so render() skips per-frame getElementById calls
 const hud = {
   speed:el('h-speed'), altLabel:el('h-altLabel'), alt:el('h-alt'), altS:el('h-altS'),
   soi:el('h-soi'), fuel:el('h-fuel'), throttle:el('h-throttle'), warp:el('h-warp'),
@@ -439,55 +441,41 @@ const BASE_CELL = 20;
 const GRID_MIN_ZOOM = 0.35, GRID_MAX_ZOOM = 4;
 const SPRITE_RASTER_CELL = 64;
 
-// Gameplay-scaled solar system, not a uniform real-world multiple — distance,
-// radius, and gravity each have their own scaling constant below (GM_SUN_MULT,
-// ORBIT_PERIOD_CALIBRATION_MULT, PLANET_GM_MULT) so build/launch/travel stay playable.
+// gameplay scaled solar system uniform real
 const AU = 1496000000;
 const SUN_RADIUS = 3800000;
 const SUN_POS = {x:0, y:0};
 
 const SAFE_LANDING_SPEED = 300;
 const MAX_SUBSTEPS_PER_FRAME = 2500;
-// Real seconds in a year, used only to derive GM_SUN — planets do NOT take a
-// real year to orbit (see ORBIT_PERIOD_CALIBRATION_MULT, which shortens them).
+// Real seconds in a year, used only to derive GM_SUN — planets don't actually take this long to orbit
 const ORBIT_YEAR_SECONDS = 31557600;
-// Scales the Sun's gravity up from the pure Kepler value (stronger solar
-// pull/escape velocity). Kept independent of ORBIT_PERIOD_CALIBRATION_MULT so
-// changing solar gravity doesn't affect how fast planets orbit.
+// scales sun s gravity up from
 const GM_SUN_MULT = 150;
 const GM_SUN = 4 * Math.PI * Math.PI * AU * AU * AU / (ORBIT_YEAR_SECONDS * ORBIT_YEAR_SECONDS) * GM_SUN_MULT;
-// Artificial factor planet orbital periods (which run on rails via omega, not
-// simulated gravity) are calibrated against — independent of GM_SUN_MULT so
-// solar gravity strength doesn't alter planet pacing. Periods are divided by
-// sqrt(this), so they're shorter than real life by that factor (Earth's
-// in-sim year ≈ 115.5 days, not 365.25).
+// artificial factor planet orbital periods run
 const ORBIT_PERIOD_CALIBRATION_MULT = 10;
-// Multiplies planet gravity wells so escaping them is a real challenge. Raises
-// actual surface gravity to surfG*PLANET_GM_MULT — weight/TWR math must use
-// that value, not the raw surfG.
+// multiplies planet gravity wells escaping them
 const PLANET_GM_MULT = 10;
-// Extra scale on top of the Hill-sphere formula, to size spheres of influence
-// independently of the gravity values above.
+// Extra scale on top of the Hill-sphere formula, for SOI size independent of gravity above
 const SOI_SCALE = 0.4;
-// Gameplay drag: exponential velocity decay from an artificial density based
-// on atmosphere depth (see integrate()), not a real aerodynamic model — tuned
-// so atmosphere alone won't safely stop a descent; needs chute or engine too.
+// gameplay drag exponential velocity decay from
 const ATMO_DRAG_K = 0.05;
 const PARACHUTE_DRAG_MULT = 40;
 const GAS_GIANT_CRUSH_DEPTH = 0.4;
-const WARP_LEVELS = [1,5,25,100,1000,10000,100000,1000000];
+const WARP_LEVELS = [0,0.1,0.5,1,5,25,100,1000,10000,100000,1000000]; //new warp levels bc landing on tiny little moons is hard at 1x
+// Extra moon-only SOI scale — Hill-sphere formula makes moon SOIs too tight to fly in otherwise
+const MOON_SOI_MULT = 2.5; //Moon sois were small so i just put this in to make it good
+// orbit ellipses drawn their screen size
+const ORBIT_MIN_PX = 4; //smallest screen before orbit lines are drawn on screen
+const ORBIT_MAX_PX_MULT = 50; //if it is too big it wont get drawn
 const ATMO_ZOOM_ENTER_MPP = 30;  // camera snaps to this zoom on atmosphere entry
 const ATMO_ZOOM_MAX_MPP  = 50;   // max zoom-out allowed while inside atmosphere
 const MOUSE_PULL_ACCEL = 1500;   // acceleration from the mouse-pull cheat (u/s²)
-// Launch pad height above the surface — shared by launch() (spawn height) and
-// drawLaunchPad() (visuals) so they can't drift apart.
+// Launch pad height above surface — shared by launch() and drawLaunchPad() so they can't drift apart
 const LAUNCH_PAD_HEIGHT = 8;
 
-// ============================================================
-// SOLAR SYSTEM — gameplay-scaled radii/distances/gravity, not a
-// uniform real-world multiple (see comments above).
-// Bodies by key function should be like somewhat generic for parented stuff
-// ============================================================
+// solar system gameplay scaled radii distances
 const PLANET_DEFS = [
   {key:'mercury',name:'Mercury',parent:'sun',color:'#9c8d7b',groundColor:'#8a7d6d',radius:32000, surfG:3.7, distAU:0.387, periodDays:88,     solid:true, atmo:false, eccMod:0.794},
   {key:'venus',  name:'Venus',  parent:'sun',color:'#d9b96a',groundColor:'#caa050',radius:90000, surfG:8.9, distAU:0.723, periodDays:225,    solid:true, atmo:true,  atmoFrac:0.5, atmoColor:'#c9a84c', eccMod:0.993},
@@ -503,7 +491,7 @@ const PLANET_DEFS = [
 // Moons are calculated based on the home planet multiplicatively. I dont know why I did it this specific way. Claude could've doneit better probably. Its all not standard but makes sense to me. Sorry modders.
 let moonAngleSeed=0;
 const MOON_DEFS = [
-  {key:'moon',    name:'The Moon',parent:'earth',  color:'#bdbdbd',groundColor:'#9a9a9a',radiusMod:0.27240,distMod:60.3,  surfG:1.62,  eccMod:0.94510,solid:true,atmo:false},
+  {key:'moon',    name:'The Moon',parent:'earth',  color:'#bdbdbd',groundColor:'#9a9a9a',radiusMod:0.27240,distMod:30.15, surfG:1.62,  eccMod:0.94510,solid:true,atmo:false}, //moon dist unrealistic. I know. i halved it for gameplay reasons
 
   {key:'phobos',  name:'Phobos',  parent:'mars',   color:'#8a7a6a',groundColor:'#6d5f52',radiusMod:0.00332,distMod:2.77,  surfG:0.0057,eccMod:0.98490,solid:true,atmo:false},
   {key:'deimos',  name:'Deimos',  parent:'mars',   color:'#9a8a7a',groundColor:'#7d6f62',radiusMod:0.00183,distMod:6.92,  surfG:0.003, eccMod:0.99980,solid:true,atmo:false},
@@ -538,7 +526,7 @@ const MOON_DEFS = [
 ];
 
 //Sun is root and has no parent. so i made it null. 
-const SUN_BODY = {key:'sun',name:'Sun',parent:null,radius:SUN_RADIUS,GM:GM_SUN,GMbase:GM_SUN,solid:false,atmo:false};
+const SUN_BODY = {key:'sun',name:'Sun',parent:null,radius:SUN_RADIUS,color:'#ffb020',GM:GM_SUN,GMbase:GM_SUN,solid:false,atmo:false};
 const BODIES_BY_KEY = {sun:SUN_BODY};
 
 function eccFromMod(mod){
@@ -555,11 +543,9 @@ function solveKepler(M,e){
 const TOP_LEVEL_PLANETS = PLANET_DEFS.map((p,i)=>{
   const distance = p.distAU*AU;
   const GM = p.surfG*p.radius*p.radius*PLANET_GM_MULT;
-  // GMbase intentionally excludes PLANET_GM_MULT: SOI is a gameplay size, kept
-  // stable regardless of how strong the boosted surface gravity is.
+  // GMbase excludes PLANET_GM_MULT — keeps SOI size stable regardless of boosted gravity
   const GMbase = p.surfG*p.radius*p.radius;
-  // Divide period by sqrt(ORBIT_PERIOD_CALIBRATION_MULT) — the artificial
-  // pacing factor, independent of the Sun's actual gravity strength (GM_SUN_MULT).
+  // Divide by sqrt(ORBIT_PERIOD_CALIBRATION_MULT) — artificial pacing, independent of GM_SUN_MULT
   const periodSimSeconds = (p.periodDays/365.25)*ORBIT_YEAR_SECONDS/Math.sqrt(ORBIT_PERIOD_CALIBRATION_MULT);
   const omega = 2*Math.PI/periodSimSeconds;
   const initialAngle = (i/PLANET_DEFS.length)*Math.PI*2;
@@ -579,7 +565,7 @@ const MOONS = MOON_DEFS.map(m=>{
   const GM = GMbase*PLANET_GM_MULT;
   const omega = Math.sqrt(parent.GM/(distance*distance*distance));
   const initialAngle = (moonAngleSeed++%7)/7*Math.PI*2;
-  const soi = Math.max(radius*3, distance*Math.cbrt(GMbase/(3*parent.GM))*SOI_SCALE);
+  const soi = Math.max(radius*3, distance*Math.cbrt(GMbase/(3*parent.GM))*SOI_SCALE)*MOON_SOI_MULT; //this computes moon soi multi from earlier which i set
   const ecc = eccFromMod(m.eccMod);
   const body = Object.assign({},m,{radius,distance,GM,GMbase,omega,initialAngle,soi,ecc});
   BODIES_BY_KEY[body.key]=body;
@@ -591,8 +577,17 @@ SUN_BODY.soi = 3.5*BODIES_BY_KEY['pluto'].distance;
 
 //planets now got moons so update this
 const PLANETS = [...TOP_LEVEL_PLANETS, ...MOONS];
+// STAR_BODIES is its own array so Alpha Centauri can be appended later without touching downstream code
+const STAR_BODIES = [SUN_BODY];
 //everybody includes the sun though.
-const ALL_BODIES = [SUN_BODY, ...PLANETS];
+const ALL_BODIES = [...STAR_BODIES, ...PLANETS];
+
+// SOI nesting depth (sun=0, planet=1, moon=2) — gates timewarp caps and auto-pause
+function bodyDepth(b){ // warp cap based on soi type if planet or moon or sun or whatever
+  let d=0, cur=b;
+  while(cur&&cur.parent){ d++; cur=BODIES_BY_KEY[cur.parent]; }
+  return d;
+}
 
 function planetOrbitState(p,t){
   const e=p.ecc;
@@ -670,15 +665,10 @@ function findDominantBody(pos,t){
 }
 
 const EARTH = PLANETS.find(p=>p.key==='earth');
-// Actual simulated surface gravity (GM/r²), equal to surfG*PLANET_GM_MULT.
-// Build-screen TWR must use this, not the raw pre-multiplier EARTH.surfG,
-// or displayed TWR will be off by a factor of PLANET_GM_MULT.
+// actual simulated surface gravity gm r
 const EARTH_SURF_G = EARTH.GM/(EARTH.radius*EARTH.radius);
 
-// ============================================================
-// PART DEFINITIONS — thrust/fuel values are gameplay-tuned, not
-// modeled on any real engine
-// ============================================================
+// part definitions thrust fuel values gameplay
 const PARTS = {
   pod:   {id:'pod',  name:'Command Pod',       w:2,h:4,dryMass:800, fuel:0,    thrust:0,      fuelRate:0,  color:'#8fb7ff',type:'pod'},
   tankS: {id:'tankS',name:'Fuel Tank — Small', w:2,h:4,dryMass:400, fuel:1800, thrust:0,      fuelRate:0,  color:'#c7cdd6',type:'tank'},
@@ -796,10 +786,7 @@ function drawPartShape(ctx,d,x,y,w,h){
   }
   ctx.restore();
 }
-// Draws a part rotated about its own center. (cx,cy) = center in pixel
-// space; nw,nh = the part's UNROTATED (natural, d.w×d.h-proportioned) pixel
-// size — the rotation transform itself performs the visual w/h swap, so
-// drawPartShape always draws at its natural aspect inside the rotated frame.
+// draws part rotated about own center
 function drawPartShapeRotated(ctx,d,cx,cy,nw,nh,rot){
   ctx.save();
   ctx.translate(cx,cy);
@@ -807,11 +794,7 @@ function drawPartShapeRotated(ctx,d,cx,cy,nw,nh,rot){
   drawPartShape(ctx,d,-nw/2,-nh/2,nw,nh);
   ctx.restore();
 }
-// Yellow direction arrow, drawn pointing "up" in the part's own local frame
-// (before rotation) — for every part this is the default/rot-0 heading; for
-// docking ports specifically, local "up" IS the connecting/open side by
-// convention (rot=0 => open side up), so the same arrow doubles as the
-// dock's connection indicator once rotated into place.
+// yellow direction arrow drawn pointing up
 function drawDirArrow(ctx,cx,cy,nw,nh,rot){
   ctx.save();
   ctx.translate(cx,cy);
@@ -877,16 +860,13 @@ let flightMousePos = {x:0, y:0};
 let flightMouseDown = false;
 
 const gridCanvas = el('gridCanvas');
-// alpha:false — this canvas fully repaints its background every frame, so
-// telling the browser it's opaque skips alpha-compositing work.
+// alpha:false — canvas repaints its background every frame, so opaque skips compositing work
 const gctx = gridCanvas.getContext('2d',{alpha:false});
 gctx.imageSmoothingEnabled = true;
 if('imageSmoothingQuality' in gctx) gctx.imageSmoothingQuality='high';
 
 function fitCanvasToDisplay(canvas,ctx){
-  // Cap DPR: on very high-density/weak-GPU combinations an uncapped ratio
-  // can demand a much larger backing buffer than the display can usefully
-  // show; 2x is already sharp and keeps the pixel count sane.
+  // cap dpr very high density weak
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const w=canvas.clientWidth, h=canvas.clientHeight;
   const pw=Math.max(1,Math.round(w*dpr)), ph=Math.max(1,Math.round(h*dpr));
@@ -946,8 +926,7 @@ function cellFromEvent(e){
 function rectsOverlap(a,b){
   return a.col<b.col+b.w && a.col+a.w>b.col && a.row<b.row+b.h && a.row+a.h>b.row;
 }
-// Rotation (0/90/180/270, clockwise, on-screen) swaps the effective grid
-// footprint w<->h at odd multiples of 90 — a 2x1 part rotated 90 becomes 1x2.
+// Rotation (0/90/180/270 clockwise) swaps footprint w<->h at odd multiples of 90 — 2x1 rotated 90 becomes 1x2
 function effDims(partDefId,rot){
   const d=PARTS[partDefId];
   return ((rot||0)%180===0) ? {w:d.w,h:d.h} : {w:d.h,h:d.w};
@@ -974,8 +953,7 @@ function bandOccupiedCol(parts,row,h,col){
     return row<fp.row+fp.h && row+h>fp.row && col<fp.col+fp.w && col+1>fp.col;
   });
 }
-// Direction codes match rotation degrees: 0=up, 90=right, 180=down, 270=left.
-// True if hull (any placed part) touches the given footprint on that side.
+// Dir codes = rotation degrees (0=up,90=right,180=down,270=left); true if hull touches that side
 function dirHullAdjacent(parts,col,row,w,h,dir){
   switch(((dir%360)+360)%360){
     case 0:   return bandOccupied(parts,col,w,row-1);     // hull above
@@ -991,8 +969,7 @@ function canPlace(partDefId,col,row,rot){
   const eff=effDims(partDefId,rot);
   if(col<0||row<0||col+eff.w>COLS||row+eff.h>ROWS) return false;
   if(d.type==='dock'){
-    // must sit against hull on the mounted side (opposite the arrow/open
-    // side) — the open side must stay clear so it's free to dock with
+    // must sit against hull on the mounted side; open side stays clear to dock with
     const openDir=rot, mountDir=(rot+180)%360;
     const mounted=dirHullAdjacent(placedParts,col,row,eff.w,eff.h,mountDir);
     const openBlocked=dirHullAdjacent(placedParts,col,row,eff.w,eff.h,openDir);
@@ -1053,8 +1030,7 @@ gridCanvas.addEventListener('contextmenu',e=>{
     }
   }
 });
-// ---------- Rotate (R key): rotates the part under the cursor if one is
-// placed there, otherwise rotates the ghost/preview for the next placement.
+// ---------- Rotate (R key): rotates hovered placed part, else the ghost/preview ----------
 window.addEventListener('keydown',e=>{
   if(mode!=='build') return;
   if(e.key.toLowerCase()!=='r') return;
@@ -1067,16 +1043,14 @@ window.addEventListener('keydown',e=>{
       if(hoverCell.col>=fp.col&&hoverCell.col<fp.col+fp.w&&hoverCell.row>=fp.row&&hoverCell.row<fp.row+fp.h){
         const newRot=(partRot(pp)+90)%360;
         const eff=effDims(pp.id,newRot);
-        // re-anchor around the part's center so it rotates in place rather
-        // than pivoting from a corner
+        // re-anchor around center so it rotates in place, not from a corner
         const oldEff=effDims(pp.id,partRot(pp));
         const cx=pp.col+oldEff.w/2, cy=pp.row+oldEff.h/2;
         const newCol=Math.round(cx-eff.w/2), newRow=Math.round(cy-eff.h/2);
         const others=placedParts.filter(o=>o.uid!==pp.uid);
         const savedCol=pp.col,savedRow=pp.row,savedRot=pp.rot;
         pp.col=newCol; pp.row=newRow; pp.rot=newRot;
-        // Validate against every OTHER part (not placedParts, which still
-        // includes this part at its new spot and would false-flag itself)
+        // validate against other parts, not placedParts (would false-flag itself)
         let valid = newCol>=0&&newRow>=0&&newCol+eff.w<=COLS&&newRow+eff.h<=ROWS;
         if(valid && PARTS[pp.id].type==='dock'){
           const openDir=newRot, mountDir=(newRot+180)%360;
@@ -1193,21 +1167,12 @@ function footprintsTouch(a,b){
   const horizTouch=rowOverlap&&(aR===bL||bR===aL);
   return vertTouch||horizTouch;
 }
-// For each engine, BFS outward through touching parts, but only ever hop
-// through 'tank' parts. Pods, other engines, chutes, and — crucially —
-// separators all act as walls, so cutting a rocket with a separator also
-// cuts the fuel line, giving each stage its own isolated tank pool.
+// each engine bfs outward through touching
 function computeEngineConnections(parts){
   const engines=parts.filter(pp=>{const t=PARTS[pp.id].type; return t==='engine'||t==='rcs';});
   const connections={};
   engines.forEach(eng=>{
-    // Reference row is the engine's own center — every candidate tank is
-    // checked against THIS, not against whichever part the BFS is currently
-    // on, so a chain can't zigzag below the engine and back up to sneak in
-    // a tank that's actually mounted underneath it (row increases downward;
-    // see shipFootOffset). Tanks at or above the engine (equal-or-smaller
-    // center row) are fair game; anything strictly below is excluded —
-    // fuel doesn't flow "up" past the engine into a tank under it.
+    // reference row engine s own center
     const engFp=placedFootprint(eng);
     const engCenterRow=engFp.row+engFp.h/2;
     const visited=new Set([eng.uid]);
@@ -1268,12 +1233,7 @@ const SAVE_KEY = 'sfs_ships_v3'; // localStorage key; bump the suffix if the sav
 let ships = [];
 let activeShipIdx = -1;
 let warp = 1;
-// Set true whenever the ship roster or a ship's status actually changes.
-// loop() only calls renderShipList() when this is set, then clears it —
-// rebuilding the list (and its delete/switch buttons) unconditionally every
-// frame was destroying and recreating those button DOM nodes ~60x/sec,
-// which silently ate most clicks (the node under the cursor at mousedown
-// was gone by mouseup, so the browser never fires 'click').
+// set true whenever ship roster ship
 let shipListDirty = true;
 // camera.angle lets the view rotate to track the active ship's heading (see cheats.camRotate)
 let camera = {x:EARTH.distance, y:0, metersPerPixel:0.5, angle:0};
@@ -1316,9 +1276,7 @@ function recomputeShipFromParts(ship){
   ship.dryMass=s.dryMass; ship.fuelCap=s.fuel;
   ship.thrust=s.thrust; ship.fuelRate=s.fuelRate;
   ship.sprite=ship.parts.length?buildSprite(ship.parts):ship.sprite;
-  // Drop per-part state for anything just jettisoned, then reroute fuel
-  // connections for the surviving layout (a stage separation can isolate
-  // tanks that used to be reachable through the discarded parts).
+  // drop per part state anything jettisoned
   const keepUids=new Set(ship.parts.map(pp=>String(pp.uid)));
   Object.keys(ship.tankFuel).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.tankFuel[uid]; });
   Object.keys(ship.engineEnabled).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.engineEnabled[uid]; });
@@ -1334,48 +1292,35 @@ function shipCollisionRadius(sh){
 function hasDockPort(sh){
   return sh.parts.some(pp=>PARTS[pp.id].type==='dock');
 }
-// A dock's rotation (0/90/180/270) IS its open/connecting direction by
-// convention — rot 0 = open side up, matching the arrow drawn in the
-// builder. Old saves predate the rot field, so default to 0 (open up),
-// same as the game's previous fixed behavior.
+// dock s rotation 0 90 180
 function dockDir(dockPart){ return partRot(dockPart); }
-// World-space unit vector a local direction (deg, 0=up/90=right/180=down/
-// 270=left in the ship's own unrotated grid) points to once the ship is
-// rotated to its current flight angle. Uses the same sin/cos convention as
-// the engine-thrust code above (fwd = sin(angle), cos(angle) at dir=0).
+// world space unit vector local direction
 function worldDirFromLocal(shipAngle,localDeg){
   const rad=(shipAngle||0)+localDeg*Math.PI/180;
   return {x:Math.sin(rad), y:Math.cos(rad)};
 }
-// Rotate a grid point by a multiple of 90° (clockwise on screen) around a
-// pivot point. Used to re-orient an entire incoming ship's parts so its
-// dock port ends up facing the target port when the two ships merge.
+// rotate grid point multiple 90 clockwise
 function rotateGridPoint(col,row,pivotCol,pivotRow,deltaDeg){
   let dx=col-pivotCol, dy=row-pivotRow;
   const steps=(((deltaDeg%360)+360)%360)/90;
   for(let i=0;i<steps;i++){ const ndx=-dy, ndy=dx; dx=ndx; dy=ndy; }
   return {col:pivotCol+dx, row:pivotRow+dy};
 }
-// Merges ship b into ship a at their dock ports — opposite of activateSeparator.
-// dirA/dirB are the ports' open directions (deg) in each ship's own local grid.
+// Merges ship b into ship a at their dock ports — opposite of activateSeparator
 function mergeShips(a,dockA,b,dockB){
   const dirA=dockDir(dockA), dirB=dockDir(dockB);
   const fpA=placedFootprint(dockA);
-  // Rotate all of ship b's parts (in b's local grid) so dockB ends up facing
-  // exactly opposite dockA (i.e. the two ports face each other once fused).
+  // rotate ship b's parts so dockB faces opposite dockA
   const delta=(((dirA+180)-dirB)%360+360)%360;
   const fpBraw=placedFootprint(dockB);
   const pivot={col:fpBraw.col+fpBraw.w/2, row:fpBraw.row+fpBraw.h/2};
-  // Re-derive dockB's rotated footprint from its rotated center/dims so the
-  // adjacency offset below lines up exactly with where b's parts will land.
+  // re-derive dockB's rotated footprint so the offset below lines up
   const dockBNewRot=(dirB+delta)%360;
   const dockBEff=effDims(dockB.id,dockBNewRot);
-  // dockB's center is unmoved by its own pivot rotation — only its
-  // effective w/h (and therefore its top-left corner) can change
+  // dockB's center is unmoved by its own rotation, only w/h changes
   const dockBNewCol=Math.round(pivot.col-dockBEff.w/2);
   const dockBNewRow=Math.round(pivot.row-dockBEff.h/2);
-  // Offset to slide the (already-rotated) b assembly so its port sits flush
-  // against a's port, on the side a's port opens toward.
+  // slide b so its port sits flush against a's port
   let colOff=0, rowOff=0;
   switch(dirA){
     case 0:   colOff=fpA.col-dockBNewCol;              rowOff=fpA.row-(dockBNewRow+dockBEff.h); break; // b above a
@@ -1431,15 +1376,10 @@ function handleShipCollisions(){
           for(const dockB of docksB){
             const wA=worldDirFromLocal(a.angle,dockDir(dockA));
             const wB=worldDirFromLocal(b.angle,dockDir(dockB));
-            // Ports must face each other (opposite world directions), not
-            // the same way or back-to-back — this is what stops two ships
-            // that happen to be near each other, but not actually lined up
-            // port-to-port, from fusing in the wrong direction.
+            // ports must face each other opposite
             const facingDot=wA.x*wB.x+wA.y*wB.y;
             if(facingDot>-0.85) continue;
-            // B must actually sit in the direction A's port opens toward
-            // (not to the side or behind it) — this is what stops ships
-            // that drift past each other sideways from clipping together.
+            // b must actually sit direction s
             const alignDot=relN.x*wA.x+relN.y*wA.y;
             if(alignDot<0.85) continue;
             mergeShips(a,dockA,b,dockB);
@@ -1479,10 +1419,7 @@ function launch(){
   const earthNx=earthPos.x/earthDist;
   const earthNy=earthPos.y/earthDist;
   const PAD_H=LAUNCH_PAD_HEIGHT;
-  // Each tank starts full and tracks its own fuel; each engine starts enabled
-  // and only drains the tank(s) it's physically connected to (see
-  // computeEngineConnections) — this is what makes staged, multi-tank
-  // rockets behave correctly.
+  // each tank starts full tracks own
   const tankFuel={};
   parts.forEach(pp=>{ if(PARTS[pp.id].type==='tank') tankFuel[pp.uid]=PARTS[pp.id].fuel; });
   const engineEnabled={};
@@ -1582,9 +1519,7 @@ function loadShips(){
   }catch(err){ return false; }
 }
 
-// Saved rocket designs (build mode) — same localStorage-backed pattern as
-// the flying-ship save above, just keyed separately and storing layouts
-// instead of live flight state.
+// saved rocket designs build mode same
 const SAVE_ROCKETS_KEY = 'sfs_rockets_v1';
 function saveRocketDesigns(){
   try{ localStorage.setItem(SAVE_ROCKETS_KEY, JSON.stringify(savedRockets)); }catch(err){}
@@ -1670,31 +1605,45 @@ function setWarp(w){
   hud.warp.textContent=formatWarpLabel(w);
 }
 function computeMaxAllowedWarp(){
-  let inAtmoAny=false;
+  let cap=Infinity; //no cap frfr
   ships.forEach(s=>{
     if(s.status==='landed') return; // landed ships don't restrict warp
     if(s.status!=='flying') return;
-    if(s._inAtmo) inAtmoAny=true;
+    if(s._inAtmo){ cap=Math.min(cap,5); return; } // allow up to 5× warp inside atmospheres
+    const depth=bodyDepth(s._domBody); //cap based on planet moon or sun or interstellar or wtv
+    if(depth>=2) cap=Math.min(cap,100); //100x cap inside moon soi
+    else if(depth===1) cap=Math.min(cap,10000); //and 10kx for planet soi.
   });
-  if(inAtmoAny) return 5; // allow up to 5× warp inside atmospheres
-  return WARP_LEVELS[WARP_LEVELS.length-1];
+  return cap;
 }
 function largestAllowedLevel(maxAllowed){
-  let best=1;
+  let best=0;
   WARP_LEVELS.forEach(w=>{ if(w<=maxAllowed) best=w; });
   return best;
 }
 function updateWarpButtonsUI(maxAllowed, minAllowed){
-  minAllowed=minAllowed||1;
+  minAllowed=minAllowed===undefined?0:minAllowed; //defaults to 0
   document.querySelectorAll('.warp-btn').forEach(b=>{
     const w=parseFloat(b.dataset.w);
     const disabled=w>maxAllowed||w<minAllowed;
     b.disabled=disabled;
     b.title=!disabled?''
-      :(w>maxAllowed?'Unavailable inside a planet\u2019s atmosphere'
+      :(w>maxAllowed?'Unavailable at this SOI depth / inside a planet\u2019s atmosphere'
                     :'Locked while Nav Beacon is flying the planned path');
   });
+  const customBtn=el('customWarpBtn');
+  if(customBtn) customBtn.title=isFinite(maxAllowed)?('Max '+formatWarpLabel(maxAllowed)+' right now'):'';
 }
+// custom warp. bigger than 1mx needed prob when alpha centauri added
+function applyCustomWarp(){
+  const inp=el('customWarpInput');
+  const v=parseFloat(inp.value);
+  if(!isFinite(v)||v<0){ showToast('Enter a valid warp value (0 or greater).'); return; }
+  setWarp(v);
+}
+el('customWarpBtn').onclick=applyCustomWarp;
+el('customWarpInput').addEventListener('keydown',e=>{ if(e.key==='Enter') applyCustomWarp(); });
+
 function updateZoomButtons(){
   const sh=activeShip();
   const inAtmo=sh&&sh._inAtmo;
@@ -1722,7 +1671,7 @@ function updateEngineBtn(){
     b.classList.toggle('on',sh.engineOn);
   }
 }
-el('engineToggle').onclick=()=>{
+function toggleEngine(){ //changed location of this so pressing space can toggle it
   const sh=activeShip();
   if(!sh) return;
   if(sh.status==='landed'){
@@ -1740,7 +1689,8 @@ el('engineToggle').onclick=()=>{
   if(sh.status!=='flying') return;
   if(warp>1) setWarp(1);
   sh.engineOn=!sh.engineOn; updateEngineBtn();
-};
+}
+el('engineToggle').onclick=toggleEngine;
 function updateChuteBtn(){
   const b=el('chuteToggle');
   const sh=activeShip();
@@ -1954,6 +1904,11 @@ window.addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   keys[k]=true;
   if(k==='a'||e.key==='ArrowLeft'||k==='d'||e.key==='ArrowRight'||k==='q'||k==='e') e.preventDefault();
+  // Space toggles engine thrust, but not while typing in Typeedit cheat menu.
+  if(k===' '&&document.activeElement&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
+    e.preventDefault();
+    toggleEngine();
+  }
 });
 window.addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 
@@ -1961,8 +1916,7 @@ window.addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 // FLIGHT CANVAS / CAMERA
 // ============================================================
 const flightCanvas=el('flightCanvas');
-// alpha:false — render() paints the full background every frame (see the
-// bgR/bgG/bgB fillRect below), so this is never actually transparent.
+// alpha:false — render() always paints the full bgR/bgG/bgB background, so never actually transparent
 const fctx=flightCanvas.getContext('2d',{alpha:false});
 fctx.imageSmoothingEnabled=true;
 if('imageSmoothingQuality' in fctx) fctx.imageSmoothingQuality='high';
@@ -1973,7 +1927,7 @@ flightCanvas.addEventListener('wheel',e=>{
   if(!sh) return;
   e.preventDefault();
   const factor=e.deltaY>0?1.15:1/1.15;
-  const maxMpp=sh._inAtmo?ATMO_ZOOM_MAX_MPP:150000000;
+  const maxMpp=sh._inAtmo?ATMO_ZOOM_MAX_MPP:44000000000;
   camera.metersPerPixel=Math.max(0.02,Math.min(maxMpp,camera.metersPerPixel*factor));
 },{passive:false});
 
@@ -1995,9 +1949,7 @@ flightCanvas.addEventListener('mousedown',e=>{
   if(e.button===0) flightMouseDown=true;
 });
 
-// ---------- World ↔ Screen coordinate conversion ----------
-// worldToScreen rotates the view so that the active ship always
-// points "up" on screen when the camera-rotation cheat is enabled.
+// world screen coordinate conversion worldtoscreen rotates
 function worldToScreen(wx,wy){
   const cw=flightCanvas.clientWidth, ch=flightCanvas.clientHeight;
   const dx=(wx-camera.x)/camera.metersPerPixel;
@@ -2016,9 +1968,7 @@ function screenToWorld(sx,sy){
   const a=camera.angle;
   const cos=Math.cos(a), sin=Math.sin(a);
   const sdx=sx-cw/2, sdy=sy-ch/2;
-  // Exact inverse of worldToScreen (derived from the Y-flip + rotation matrix):
-  // wx_rel = mpp*(sdx*cos + sdy*sin)
-  // wy_rel = mpp*(sdx*sin - sdy*cos)
+  // exact inverse worldtoscreen derived from y
   return {
     x: camera.x + mpp*(sdx*cos + sdy*sin),
     y: camera.y + mpp*(sdx*sin - sdy*cos),
@@ -2096,9 +2046,7 @@ el('ctxDeleteBtn').onclick=()=>{
   hideCtxMenu();
 };
 
-// Places the Ships panel directly below the HUD's actual current height —
-// measured live rather than assumed, so it stays clear of the HUD whether
-// or not the TypeEdit cheat panel (which adds ~5 extra rows) is showing.
+// places ships panel directly below hud
 function positionShipList(){
   const hud=el('hud'), list=el('shipList');
   const gap=18; // matches --sp-5, the spacing used between the other float panels
@@ -2124,24 +2072,22 @@ function renderShipList(){
 }
 
 // ---------- Stars ----------
+// square diagonal layer, more stars to match density (see renderStarLayer)
 const STARS=[];
-for(let i=0;i<220;i++) STARS.push({x:Math.random(),y:Math.random(),r:Math.random()*1.3+0.3,a:Math.random()*0.5+0.35});
+for(let i=0;i<500;i++) STARS.push({x:Math.random(),y:Math.random(),r:Math.random()*1.3+0.3,a:Math.random()*0.5+0.35});
 
-// Stars are pre-rendered once into an offscreen canvas instead of drawing 220
-// individual arcs every frame — cheap on desktop but adds up on weak GPUs at
-// 60fps. Re-rendered only when the canvas's pixel size changes (resize/DPR
-// change); render() blits it with a single drawImage and dims it uniformly
-// via globalAlpha, which is equivalent to the old per-star alpha*starFade
-// since alpha compositing multiplies.
+// stars pre rendered once into offscreen
 const starLayer=document.createElement('canvas');
 const starLayerCtx=starLayer.getContext('2d');
 let starLayerW=0, starLayerH=0;
+// square (canvas diagonal), not pxW x pxH — so rotation never shows black corners
 function renderStarLayer(pxW,pxH,dpr){
-  starLayer.width=pxW; starLayer.height=pxH;
+  const size=Math.ceil(Math.hypot(pxW,pxH));
+  starLayer.width=size; starLayer.height=size;
   STARS.forEach(st=>{
     starLayerCtx.fillStyle=`rgba(255,255,255,${st.a})`;
     starLayerCtx.beginPath();
-    starLayerCtx.arc(st.x*pxW,st.y*pxH,st.r*dpr,0,Math.PI*2);
+    starLayerCtx.arc(st.x*size,st.y*size,st.r*dpr,0,Math.PI*2);
     starLayerCtx.fill();
   });
   starLayerW=pxW; starLayerH=pxH;
@@ -2158,11 +2104,7 @@ function destroyShip(f,reason){
   showToast(reason);
 }
 
-// Fires every individually-enabled engine that still has fuel in its
-// connected tank(s) (see computeEngineConnections), draining exactly those
-// tanks. Returns the combined thrust produced this step (0 if the master
-// engine switch is off or nothing can fire). All engines share the ship's
-// angle/throttle (no gimbaling), so callers just need this scalar total.
+// fires every individually enabled engine still
 function fireEnginesAndDrainFuel(f,dt){
   if(!f.engineOn) return 0;
   let totalThrust=0;
@@ -2185,9 +2127,7 @@ function fireEnginesAndDrainFuel(f,dt){
   });
   if(!cheats.infiniteFuel){
     f.fuel=Object.values(f.tankFuel).reduce((a,b)=>a+b,0);
-    // Auto-off only when every tank any engine could draw from is truly dry —
-    // deliberately ignores engineEnabled here, so disabling engines by hand
-    // never by itself flips the master switch off.
+    // auto off every tank any engine
     const anyReachableFuel=f.parts.some(pp=>{
       if(PARTS[pp.id].type!=='engine') return false;
       const tankUids=f.engineConnections[pp.uid]||[];
@@ -2198,8 +2138,7 @@ function fireEnginesAndDrainFuel(f,dt){
   return totalThrust;
 }
 
-// WASD strafe/translate via RCS thrusters — independent of the main
-// engine on/off switch, only fires for the player-controlled active ship.
+// WASD strafe via RCS — independent of main engine, active ship only
 function fireRCS(f,dt){
   if(f.status!=='flying') return {ax:0,ay:0};
   let fx=0, fy=0;
@@ -2289,11 +2228,7 @@ function integrate(f,dt,t){
     let ray=-gMag*ry/rdist;
     f._domBody=dom.p;
 
-    // Atmosphere drag — density is an artificial function of depth-in-atmosphere,
-    // not a physical air-density model. Exponent (1.6) is steeper than the
-    // exponent used by the visual atmosphere tint in getAtmoDensity() (1.4);
-    // that's intentional — drag ramping in faster near the surface reads better
-    // for gameplay than the smoother visual fade wants.
+    // atmosphere drag density artificial function depth
     let inAtmo=false;
     if(dom.p.atmo){
       let density=0;
@@ -2422,13 +2357,7 @@ function domSubstepCap(dom){
   return (dom&&dom.p!==SUN_BODY)?SUBSTEP_DT_MAX_SOI:SUBSTEP_DT_MAX_INTERP;
 }
 
-// Adaptive substep sizing: aim to cross ~half the distance to the nearest
-// surface (SUBSTEP_NEAREST_FRACTION) per step, so close-approach ships
-// automatically get finer steps. MAX_INTERP is a relaxed cap far from any
-// body; MAX_SOI is a tight cap inside a planet's SOI, needed so the ship's
-// path stays accurate enough to match the Nav Beacon's fixed 0.25s steps
-// even at high warp. DT_MIN floors step size so a ship sitting nearly still
-// at a surface can't stall the loop.
+// adaptive substep sizing aim cross half
 const SUBSTEP_NEAREST_FRACTION = 0.5;
 const SUBSTEP_DT_MAX_INTERP = 2000; // generous cap far from all bodies
 const SUBSTEP_DT_MAX_SOI     = 150;  // tight cap inside a planet SOI for accuracy
@@ -2455,8 +2384,7 @@ function stepSimSeconds(f,simSeconds,tStart,maxSubstepDtOverride){
 // NAV BEACON
 // ============================================================
 
-// Create a physics clone of a ship for ballistic prediction (no thrust, no side effects).
-// _isBeaconClone suppresses toasts and engine-button updates in destroyShip.
+// physics clone for ballistic prediction; _isBeaconClone silences toasts/UI
 function cloneShipForBeacon(ship){
   return {
     pos:{x:ship.pos.x, y:ship.pos.y},
@@ -2482,13 +2410,8 @@ function cloneShipForBeacon(ship){
   };
 }
 
-// Substep loop for beacon prediction — same adaptive logic as stepSimSeconds
-// but capped per call (MAX_BEACON_STEPS) so a far-future prediction at high
-// warp can't stall the frame. Can stop before consuming all of `simSeconds`
-// if the budget runs out, so it returns the sim-time actually advanced —
-// callers must sync their clock to that real amount, not the requested one,
-// or the beacon path desyncs and jitters at high timewarp.
-const MAX_BEACON_STEPS = 2000;
+// substep loop beacon prediction same adaptive
+const MAX_BEACON_STEPS = 300;
 function beaconStepSimSeconds(f, simSeconds, tStart){
   let remaining=simSeconds, t=tStart, steps=0;
   while(remaining>1e-6 && steps<MAX_BEACON_STEPS && f.status==='flying'){
@@ -2507,13 +2430,7 @@ function beaconStepSimSeconds(f, simSeconds, tStart){
   return t-tStart; // actual sim-seconds advanced (may be < simSeconds)
 }
 
-// Simulate 15 *real-life* seconds of ballistic flight from the ship's current
-// state, regardless of the current warp level.  At warp W, 15 real seconds
-// equals 15×W sim-seconds, so the path covers exactly the distance the ship
-// will travel over the next 15 seconds of clock time.  60 equal segments are
-// used so the path has a smooth, consistent point density.
-// Same body-relative tagging pushTrail uses — lets drawNavBeaconPath re-anchor
-// to the planet's current position via trailPointWorldPos, matching the trail.
+// simulate 15 real life seconds ballistic
 function tagBeaconPoint(x,y,t){
   const dom=findDominantBody({x,y},t);
   if(!dom) return {x,y};
@@ -2521,8 +2438,7 @@ function tagBeaconPoint(x,y,t){
 }
 function computeNavBeaconPath(ship, simT, currentWarp){
   const POINTS = 60;
-  // 15 real seconds × warp = how many sim-seconds forward to predict.
-  // Cap at 15 million sim-seconds to keep computation finite at extreme warp.
+  // 15 real secs × warp, capped at 15M sim-secs to stay finite at high warp
   const totalSimSecs = Math.min(15 * currentWarp, 15e6);
   const segSimSecs   = totalSimSecs / POINTS;
 
@@ -2531,27 +2447,18 @@ function computeNavBeaconPath(ship, simT, currentWarp){
   let t=simT;
 
   for(let i=0;i<POINTS;i++){
-    // Advance by the sim-time actually simulated this chunk, not the amount
-    // requested — beaconStepSimSeconds can stop short if it hits its step
-    // budget, and assuming it always finished is what caused the predicted
-    // path to desync from the clone's real state and jitter at high warp.
+    // advance sim time actually simulated chunk
     const advanced=beaconStepSimSeconds(clone, segSimSecs, t);
     t+=advanced;
     path.push(tagBeaconPoint(clone.pos.x, clone.pos.y, t));
     if(clone.status!=='flying') break;
-    // If a chunk came back significantly short, the step budget can't keep
-    // up with this look-ahead horizon at the current position/warp — further
-    // chunks would only compound inaccuracy, so stop the path here rather
-    // than silently drawing a shorter, unlabeled preview past this point.
+    // chunk came back significantly short step
     if(advanced<segSimSecs*0.999) break;
   }
   return path;
 }
 
-// ── Physics-based intercept solver ──────────────────────────────────────────
-// Simulates forward T sim-seconds with no thrust (using physics) and returns
-// the final position. Uses coarse fixed steps for speed; fine enough for the
-// iterative correction below to converge.
+// physics based intercept solver simulates forward
 function simulateForIntercept(baseShip, dvx, dvy, totalSimSecs, simT){
   const clone=cloneShipForBeacon(baseShip);
   clone.vel.x+=dvx; clone.vel.y+=dvy;
@@ -2567,14 +2474,7 @@ function simulateForIntercept(baseShip, dvx, dvy, totalSimSecs, simT){
   return {x:clone.pos.x, y:clone.pos.y, crashed:clone.status!=='flying'};
 }
 
-// Find the best-intercept delta-V to reach a target planet, searching both
-// WHEN to burn and how long the transfer should take, not just "burn now" —
-// so it can find plans like coasting until a gravity-well pass has already
-// bent the ship's velocity toward the target, cutting the thrust needed.
-// Walks a coasting clone of the ship through candidate departure offsets;
-// at each one, runs the shooting method across a range of transfer
-// durations and tracks the global best |Δv|. Returns one frozen plan
-// (including when to execute it), not something recomputed on a timer.
+// find best intercept delta v reach
 const DEPARTURE_OFFSETS=[
   0, 300, 900, 1800, 3600, 7200, 14400, 21600,
   43200, 86400, 172800, 345600, 604800, 1209600, 2592000,
@@ -2590,18 +2490,15 @@ function findBestInterceptWindow(ship, planet, simT){
   let best=null;
 
   for(const offset of DEPARTURE_OFFSETS){
-    // Coast the clone (no thrust — pure gravity) from wherever it currently
-    // is up to this candidate departure time.
+    // coast the clone (no thrust) to this candidate departure time
     const targetT=simT+offset;
     if(targetT>t){
       const need=targetT-t;
       const advanced=beaconStepSimSeconds(clone, need, t);
       t+=advanced;
-      // Ship hit something while coasting this far — no point considering
-      // departure times beyond where it would already be destroyed/landed.
+      // hit something coasting — later departure times would already be moot
       if(clone.status!=='flying') break;
-      // Step budget couldn't fully cover the coast to this offset — further,
-      // later offsets would only be less reliable, so stop extending here.
+      // step budget fell short — later offsets only less reliable, stop here
       if(advanced<need*0.999) break;
     }
 
@@ -2631,14 +2528,7 @@ function findBestInterceptWindow(ship, planet, simT){
   return best;
 }
 
-// Force-onto-plan: at very high timewarp, stepSimSeconds' adaptive
-// substepping (capped by MAX_SUBSTEPS_PER_FRAME) is only an approximation,
-// so the ship's real path can drift from the finer-stepped plan
-// findBestInterceptWindow computed. Rather than reworking the integrator, we
-// freeze the plan's coast trajectory once here and snap the ship back onto
-// it every frame until the burn window opens (see loop()).
-// Samples the same no-thrust path findBestInterceptWindow's clone took from
-// `simT` to `burnSimTime`, at POINTS points, as {t,x,y,vx,vy}.
+// force onto plan at very high
 function computeNavPlanCoastPath(ship, simT, burnSimTime){
   const POINTS=60;
   const totalSimSecs=Math.max(0,burnSimTime-simT);
@@ -2652,15 +2542,13 @@ function computeNavPlanCoastPath(ship, simT, burnSimTime){
     t+=advanced;
     path.push({t, x:clone.pos.x, y:clone.pos.y, vx:clone.vel.x, vy:clone.vel.y});
     if(clone.status!=='flying') break;
-    // Step budget couldn't keep up with this chunk — later samples would only
-    // compound inaccuracy, so stop extending the stored plan here.
+    // step budget fell short — later samples only less accurate, stop here
     if(advanced<segSimSecs*0.999) break;
   }
   return path;
 }
 
-// Interpolate {x,y,vx,vy} at sim-time `t` from a frozen coast path (above).
-// Clamps to the path's ends instead of extrapolating.
+// sample frozen coast path at time t, clamped to its ends
 function sampleNavPlanCoastPath(path, t){
   if(!path||path.length===0) return null;
   if(t<=path[0].t) return path[0];
@@ -2680,33 +2568,19 @@ function sampleNavPlanCoastPath(path, t){
   return last;
 }
 
-// Guaranteed-intercept post-burn coast path.
-// findBestInterceptWindow's shooting solver can converge to a slightly-off
-// burn for tricky geometries, which a plain ballistic coast would faithfully
-// reproduce as a miss. Instead of chasing a perfect solver, we guarantee the
-// outcome: take the ordinary coast, measure the miss between its endpoint and
-// the planet's true arrival position, and blend that correction in with an
-// ease-in-out curve (none right at burn end, most through the middle, spread
-// across the whole coast — no last-second snap). The final sample always
-// exactly matches the planet's arrival position, so the ship is guaranteed to
-// reach its SOI; an already-accurate solver just gets ~zero correction.
+// guaranteed intercept post burn coast path
 function computeNavPostBurnCoastPath(ship, simT, arrivalT, planet){
   const rawPath=computeNavPlanCoastPath(ship, simT, arrivalT);
   if(rawPath.length<2) return rawPath;
 
   const rawFinal=rawPath[rawPath.length-1];
-  // Use the raw path's own final time, not the requested arrivalT — the raw
-  // sim can stop short (step-budget or an unrelated collision along the way),
-  // and correcting toward the planet's position at a time we never actually
-  // reached would just introduce a new mismatch.
+  // use raw path s own final
   const actualArrival=rawFinal.t;
   const targetPos=planetPositionAt(planet, actualArrival);
   const missX=targetPos.x-rawFinal.x;
   const missY=targetPos.y-rawFinal.y;
   const missMag=Math.hypot(missX,missY);
-  // Already close enough (the common case for a well-behaved solve) — leave
-  // the natural ballistic path untouched rather than nudging it for no
-  // visible reason.
+  // already close enough common case well
   const NO_CORRECTION_NEEDED=50;
   if(missMag<NO_CORRECTION_NEEDED) return rawPath;
 
@@ -2717,11 +2591,7 @@ function computeNavPostBurnCoastPath(ship, simT, arrivalT, planet){
     const ease=frac*frac*(3-2*frac); // smoothstep: 0 at start, 1 at end, zero slope at both ends
     return {t:p.t, x:p.x+missX*ease, y:p.y+missY*ease, vx:p.vx, vy:p.vy};
   });
-  // Re-derive velocity from the corrected positions (central differences)
-  // instead of leaving the raw, uncorrected velocities in place — a forced
-  // position that's moving one way while the forced velocity points another
-  // is what would actually read as jarring/sliding, not the position nudge
-  // itself.
+  // re derive velocity from corrected positions
   for(let i=0;i<corrected.length;i++){
     const prev=corrected[Math.max(0,i-1)];
     const next=corrected[Math.min(corrected.length-1,i+1)];
@@ -2734,14 +2604,7 @@ function computeNavPostBurnCoastPath(ship, simT, arrivalT, planet){
   return corrected;
 }
 
-// Returns whichever frozen coast path currently governs the ship's forced
-// position — the pre-burn coast to the burn window, or the post-burn coast
-// to the planned intercept — or null if neither applies right now (e.g. the
-// burn window is open and the player is expected to fly the burn for real).
-// Centralizes the phase check so the warp lock and the position-forcing
-// block in loop() can't disagree about when forcing is active.
-// Accepts an optional time to check against instead of the live `simTime` —
-// see the call site in loop() for why that matters at high timewarp.
+// returns whichever frozen coast path currently
 function activeNavForcedPath(atTime){
   if(!cheats.navBeacon||!navDeltaV) return null;
   const sh=activeShip();
@@ -2793,11 +2656,7 @@ el('planetCtxNavBtn').onclick=()=>{
 };
 el('planetCtxCloseBtn').onclick=()=>{ hidePlanetCtxMenu(); };
 
-// Ship flight trail, capped at TRAIL_MAX points. A plain array with
-// push()+shift() would cost O(n) per point once full (shift re-indexes
-// everything) — expensive since pushTrail can fire many times per frame
-// during timewarp. This fixed-size ring buffer makes both push and
-// iteration O(1) per point, with the same forEach(p,i) order callers expect.
+// ship flight trail capped at trail
 const TRAIL_MAX=3000;
 function makeTrail(){
   return {
@@ -2816,9 +2675,7 @@ function makeTrail(){
 function pushTrail(f){
   const p={x:f.pos.x, y:f.pos.y};
   if(!f.lastTrailPos||Math.hypot(p.x-f.lastTrailPos.x,p.y-f.lastTrailPos.y)>EARTH.radius*0.02){
-    // Close to a planet, the point is stored relative to that planet instead
-    // of in system coordinates, so the trail moves with the planet later
-    // instead of staying fixed against a body that has since orbited away.
+    // close planet point stored relative planet
     if(f._domBody){
       const bpos=planetPositionAt(f._domBody,simTime);
       p.body=f._domBody; p.relX=p.x-bpos.x; p.relY=p.y-bpos.y;
@@ -2827,8 +2684,7 @@ function pushTrail(f){
     f.lastTrailPos=p;
   }
 }
-// Resolves a stored trail point to its current world position — planet-
-// relative points are re-anchored to that planet's live position.
+// re-anchors a stored trail point to its planet's current position
 function trailPointWorldPos(p){
   if(!p.body) return p;
   const bpos=planetPositionAt(p.body,simTime);
@@ -2852,7 +2708,6 @@ function drawSun(){
 }
 
 function drawOrbitPath(p,t){
-  if(camera.metersPerPixel<20000) return; // only visible at medium/system zoom
   if(p.parent===null) return; //sun has no parent and no orbit, like explained previously
   const parent=BODIES_BY_KEY[p.parent];
   if(parent.parent===p.key) return; //This is extremely hard to explain. Basically more binary star math.
@@ -2863,8 +2718,12 @@ function drawOrbitPath(p,t){
   const cx=parentPos.x-a*e, cy=parentPos.y;
   const s=worldToScreen(cx,cy);
   const rx=a/camera.metersPerPixel, ry=b/camera.metersPerPixel;
+  // Screen-size based cutoff instead of a fixed metersPerPixel threshold, so tiny moon orbit rails still draw when zoomed in close. this was an annoying bug
+  const maxDim=Math.max(flightCanvas.clientWidth,flightCanvas.clientHeight);
+  if(rx<ORBIT_MIN_PX&&ry<ORBIT_MIN_PX) return; //if too small it isnt worth drawing
+  if(rx>maxDim*ORBIT_MAX_PX_MULT) return; //too big just a straight line across teh screen thats also not worth it
   fctx.beginPath(); fctx.ellipse(s.x,s.y,rx,ry,camera.angle,0,Math.PI*2);
-  fctx.strokeStyle='rgba(255,255,255,0.08)'; fctx.lineWidth=1; fctx.stroke();
+  fctx.strokeStyle=hexToRgba(p.color,0.3); fctx.lineWidth=1; fctx.stroke();
 }
 
 function drawSOICircle(p,t){
@@ -2874,9 +2733,9 @@ function drawSOICircle(p,t){
   if(r<3||r>Math.max(flightCanvas.clientWidth,flightCanvas.clientHeight)*6) return;
   fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
   fctx.setLineDash([8,6]);
-  fctx.strokeStyle='rgba(120,200,255,0.28)'; fctx.lineWidth=1; fctx.stroke();
+  fctx.strokeStyle=hexToRgba(p.color,0.35); fctx.lineWidth=1; fctx.stroke();
   fctx.setLineDash([]);
-  if(r>60){ fctx.fillStyle='rgba(120,200,255,0.55)'; fctx.font='10px sans-serif'; fctx.fillText(p.name+' SOI',s.x+r+4,s.y); }
+  if(r>60){ fctx.fillStyle=hexToRgba(p.color,0.7); fctx.font='10px sans-serif'; fctx.fillText(p.name+' SOI',s.x+r+4,s.y); }
 }
 function hexToRgba(hex,a){
   const c=hex.replace('#','');
@@ -2958,8 +2817,7 @@ function drawLaunchPad(){
   if(rPix<0.4) return;
   if(ps.x<-rPix*4||ps.x>CW+rPix*4||ps.y<-rPix*4||ps.y>CH+rPix*4) return;
 
-  // Four corners in world-space → screen-space
-  // Top face (PAD_H above surface, narrower)
+  // corners: top face above surface, base below (trapezoid silhouette)
   const TL=worldToScreen(cx+nx*PAD_H+tx*(-PAD_T/2), cy+ny*PAD_H+ty*(-PAD_T/2));
   const TR=worldToScreen(cx+nx*PAD_H+tx*(PAD_T/2),  cy+ny*PAD_H+ty*(PAD_T/2));
   // Base (PAD_EMBED below surface, wider — gives the classic trapezoid silhouette)
@@ -3028,9 +2886,7 @@ function drawNavBeaconPath(){
   fctx.restore();
 }
 
-// Crosshair marker at the world position where the planned burn will happen —
-// shown whether the ship is still coasting toward it or already there, so the
-// player has something to aim their attention at before the countdown ends.
+// crosshair marker at world position where
 function drawNavBurnMarker(){
   if(!navDeltaV||!navDeltaV.burnPos||!navTargetPlanet) return;
   const s=worldToScreen(navDeltaV.burnPos.x,navDeltaV.burnPos.y);
@@ -3052,20 +2908,16 @@ function drawNavBurnMarker(){
   fctx.restore();
 }
 
-// Nav guidance while a target planet is set: text panel showing a countdown
-// before the burn window opens, then — once it's open — an on-screen arrow
-// pointing toward the remaining Δv plus a live "Δv left" readout, switching
-// to an "on course" state once the burn is complete.
+// nav guidance target planet set text
 function drawNavArrow(sh){
   if(!navDeltaV||!navTargetPlanet||!sh) return;
   const tStr=fmtDuration(navDeltaV.interceptT);
   const panel=el('navArrowPanel');
 
-  // The plan says WHEN to burn, not just how — show a countdown until that
-  // moment; burning early would just pay the Δv this solver avoided.
+  // countdown to planned burn — burning early just wastes the solved Δv
   const waitLeft=navDeltaV.burnSimTime-simTime;
   if(waitLeft>1){
-    const magStr=(navDeltaV.mag>=1000?(navDeltaV.mag/1000).toFixed(1)+'k':Math.round(navDeltaV.mag))+' u/s';
+    const magStr=fmtSpeed(navDeltaV.mag); //format for big numbers (interstellar)
     panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
       +'Coasting — burn in <b>'+fmtDuration(waitLeft)+'</b>  '
       +'(planned Δv: '+magStr+', transfer ~'+tStr+')'
@@ -3074,12 +2926,7 @@ function drawNavArrow(sh){
     return; // no arrow yet — nothing to execute right now
   }
 
-  // Once the burn reads as done, stay done. The checks below compare current
-  // velocity against the static burn target, which only makes sense while
-  // actively thrusting — during the post-burn coast, velocity legitimately
-  // drifts from gravity, and re-deriving "remaining Δv" would spuriously flip
-  // the panel back to BURN NOW even though the ship is still correctly forced
-  // onto navPostBurnCoastPath.
+  // once burn reads done stay done
   if(navBurnDone){
     panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
       +'<b style="color:#00ff66">On course</b> — burn complete, intercept in ~'+tStr
@@ -3088,12 +2935,7 @@ function drawNavArrow(sh){
     return;
   }
 
-  // The window is open. Capture the absolute velocity we're aiming for
-  // exactly once, the first frame we're ready — then every subsequent frame
-  // we compare the ship's CURRENT velocity against that fixed target. The
-  // difference is what's actually left to add, so as the player thrusts
-  // this shrinks toward zero in real time instead of sitting frozen at the
-  // originally-planned number.
+  // window open capture absolute velocity re
   if(!navBurnTargetVel){
     navBurnTargetVel={x:sh.vel.x+navDeltaV.dvx, y:sh.vel.y+navDeltaV.dvy};
   }
@@ -3102,20 +2944,13 @@ function drawNavArrow(sh){
   const remMag=Math.hypot(remDvx,remDvy);
   const origMag=Math.max(navDeltaV.mag,0.001);
   const pctDone=Math.max(0,Math.min(100,100*(1-remMag/origMag)));
-  const remStr=(remMag>=1000?(remMag/1000).toFixed(1)+'k':Math.round(remMag))+' u/s';
+  const remStr=fmtSpeed(remMag); //format
 
-  // Close enough — snap velocity exactly onto the planned target rather than
-  // leaving the last few u/s to the player/integrator. Cheap fix for
-  // high-timewarp jitter: stops a near-miss burn from snowballing into a
-  // badly off-course coast.
+  // close enough snap velocity exactly onto
   const BURN_DONE_THRESHOLD=5;
   if(remMag<BURN_DONE_THRESHOLD){
     sh.vel.x=navBurnTargetVel.x; sh.vel.y=navBurnTargetVel.y;
-    // First frame the burn completes: freeze a coast plan to the intercept
-    // and start forcing the ship onto it (see loop()). The velocity snap
-    // above only fixes the starting condition — integration error still
-    // accumulates over the coast at high warp, so the post-burn leg needs
-    // the same forced-path treatment as the pre-burn coast.
+    // first frame burn completes freeze coast
     if(!navBurnDone){
       navBurnDone=true;
       const arrivalT=navDeltaV.burnSimTime+navDeltaV.interceptT;
@@ -3130,12 +2965,10 @@ function drawNavArrow(sh){
 
   const ss=worldToScreen(sh.pos.x,sh.pos.y);
 
-  // Direction of the REMAINING delta-v in world space, projected to screen space.
-  // On screen Y is flipped and we apply camera rotation.
+  // remaining delta-v direction, world → screen (Y flipped, camera-rotated)
   const a=camera.angle;
   const cos=Math.cos(a), sin=Math.sin(a);
-  // world (dx, dy) → screen (sdx, sdy): sdx = dx*cos - (-dy)*sin = dx*cos + dy*sin
-  //                                       sdy = dx*sin + (-dy)*cos = dx*sin - dy*cos
+  // world (dx,dy) → screen (sdx,sdy), Y-flipped and rotated
   const sdx= remDvx*cos + remDvy*sin;
   const sdy= remDvx*sin - remDvy*cos;
   const slen=Math.hypot(sdx,sdy)||1;
@@ -3189,11 +3022,9 @@ function drawShip(sh){
   const s=worldToScreen(sh.pos.x,sh.pos.y);
   const active=sh===activeShip();
   const mpp=camera.metersPerPixel;
-  // worldToScreen flips Y then applies a CCW rotation by camera.angle.
-  // Working through the matrix, the sprite must be rotated by (sh.angle + camera.angle)
-  // so the nose direction in world-space matches the thrust direction (sin angle, cos angle).
+  // worldtoscreen flips y applies ccw rotation
   const relAngle=sh.angle+camera.angle;
-  if(mpp<1.2){
+  if(mpp<6){
     const detailScale=CELL_WORLD/mpp;
     fctx.save();
     fctx.translate(s.x,s.y);
@@ -3246,10 +3077,7 @@ function drawShip(sh){
   }
 }
 
-// Visual atmosphere depth for background tint/star-fade (0=space, 1=surface).
-// Deliberately a separate curve (exponent 1.4) from the physics drag density
-// in integrate() (exponent 1.6) — this one only drives color blending and is
-// tuned to fade in smoothly rather than match the drag ramp.
+// visual atmosphere depth background tint star
 function getAtmoDensity(pos,p){
   const ppos=planetPositionAt(p,simTime);
   const rdist=Math.hypot(pos.x-ppos.x,pos.y-ppos.y);
@@ -3264,6 +3092,29 @@ function getAtmoDensity(pos,p){
     const depth=1-rdist/p.radius;
     return Math.min(1,depth*1.4);
   }
+}
+
+// culls overlapping bodies at extreme zoom-out, keeps the biggest
+const OVERLAP_CULL_PX = 3;
+function cullOverlappingBodies(){
+  const items=ALL_BODIES.map(b=>{
+    const pos=planetPositionAt(b,simTime);
+    const s=worldToScreen(pos.x,pos.y);
+    return {b,x:s.x,y:s.y};
+  });
+  const keep=new Set(ALL_BODIES);
+  for(let i=0;i<items.length;i++){
+    const a=items[i];
+    if(!keep.has(a.b)) continue;
+    for(let j=i+1;j<items.length;j++){
+      const c=items[j];
+      if(!keep.has(c.b)) continue;
+      if(Math.hypot(a.x-c.x,a.y-c.y)>OVERLAP_CULL_PX) continue;
+      if(a.b.radius>=c.b.radius) keep.delete(c.b);
+      else { keep.delete(a.b); break; }
+    }
+  }
+  return keep;
 }
 
 function render(){
@@ -3298,16 +3149,19 @@ function render(){
     if(starLayerW!==pxW||starLayerH!==pxH) renderStarLayer(pxW,pxH,dpr);
     fctx.save();
     fctx.setTransform(1,0,0,1,0,0); // blit in raw device pixels, ignoring the dpr transform
+    fctx.translate(pxW/2,pxH/2);
+    fctx.rotate(camera.angle);
     fctx.globalAlpha=starFade;
-    fctx.drawImage(starLayer,0,0);
+    fctx.drawImage(starLayer,-starLayer.width/2,-starLayer.height/2);
     fctx.restore();
   }
 
   PLANETS.forEach(p=>drawOrbitPath(p,simTime));
-  drawSOICircle(SUN_BODY,simTime);
+  STAR_BODIES.forEach(st=>drawSOICircle(st,simTime)); //more stars support.
   PLANETS.forEach(p=>drawSOICircle(p,simTime));
-  drawSun();
-  PLANETS.forEach(p=>drawPlanet(p,simTime,{x:camera.x,y:camera.y}));
+  const visibleBodies=cullOverlappingBodies();
+  if(visibleBodies.has(SUN_BODY)) drawSun();
+  PLANETS.forEach(p=>{ if(visibleBodies.has(p)) drawPlanet(p,simTime,{x:camera.x,y:camera.y}); });
   drawLaunchPad();
   ships.forEach(drawShipTrail);
   if(cheats.navBeacon) drawNavBeaconPath();
@@ -3323,17 +3177,17 @@ function render(){
       const ppos=planetPositionAt(sh._domBody,simTime);
       const pv=planetVelocityAt(sh._domBody,simTime);
       const speed=Math.hypot(sh.vel.x-pv.x,sh.vel.y-pv.y);
-      hud.speed.textContent=speed.toFixed(1)+' u/s';
+      hud.speed.textContent=fmtSpeed(speed);
       const alt=Math.hypot(sh.pos.x-ppos.x,sh.pos.y-ppos.y)-sh._domBody.radius;
       hud.altLabel.textContent='Alt ('+sh._domBody.name+')';
       hud.alt.textContent=fmtDist(alt);
       hud.soi.textContent=sh._domBody.name+(sh._inAtmo?' — atmosphere':'');
     } else {
       const speed=Math.hypot(sh.vel.x,sh.vel.y);
-      hud.speed.textContent=speed.toFixed(1)+' u/s';
+      hud.speed.textContent=fmtSpeed(speed);
       hud.altLabel.textContent='Altitude';
       hud.alt.textContent='-';
-      hud.soi.textContent='Deep space (beyond the Sun\u2019s SOI)';
+      hud.soi.textContent='Deep Space - N/A';
     }
     hud.fuel.textContent=cheats.infiniteFuel?'∞':(sh.fuelCap?Math.round(100*sh.fuel/sh.fuelCap)+'%':'0%');
 
@@ -3347,11 +3201,23 @@ function render(){
     hud.status.className='';
   }
 }
-function fmtDist(v){
-  if(Math.abs(v)>=1000000) return (v/1000000).toFixed(2)+'M u';
-  if(Math.abs(v)>=1000) return (v/1000).toFixed(1)+'k u';
-  return Math.round(v)+' u';
+// suffixes
+const NUM_SUFFIXES=[
+  {v:1e21,s:'Sx'},{v:1e18,s:'Qn'},{v:1e15,s:'Qd'},{v:1e12,s:'Tr'},
+  {v:1e9,s:'B'},{v:1e6,s:'M'},{v:1e3,s:'k'},
+];
+function formatScaledNumber(v,decimals){
+  decimals=decimals===undefined?3:decimals;
+  const av=Math.abs(v);
+  for(const {v:threshold,s:suffix} of NUM_SUFFIXES){
+    if(av>=threshold) return (v/threshold).toFixed(decimals)+suffix;
+  }
+  return Math.round(v)+'';
 }
+function fmtDist(v){
+  return formatScaledNumber(v)+' u';
+}
+function fmtSpeed(v){ return formatScaledNumber(v)+' u/s'; }
 function fmtDuration(secs){
   secs=Math.max(0,secs);
   if(secs>=86400) return (secs/86400).toFixed(1)+'d';
@@ -3365,13 +3231,7 @@ function fmtDuration(secs){
 // ============================================================
 let frameCount=0;
 let lastT=performance.now();
-// ============================================================
-// BACKGROUND MUSIC — 3 bytebeat "songs" synthesized live in an
-// AudioWorklet and crossfaded based on where the active ship is
-// (in atmosphere / in a planet's SOI / interplanetary). Generating
-// audio from a tiny formula instead of shipping audio files is the
-// whole point — near-zero bytes for a full adaptive soundtrack.
-// ============================================================
+// background music 3 bytebeat songs synthesized
 const BYTEBEAT_WORKLET_SRC = `
 function byteToSample(v){ return (((v|0)&255)-128)/128; }
 // 32kHz stereo bytebeat — played while a ship is inside a planet's atmosphere.
@@ -3395,6 +3255,26 @@ function soiTrack(t){
   const v=((t&t*91/(t>>16&1?10:12-3*(t>>17&1))/15&255)+!!(t>>20&3)*((t*6^t)*811>>9&63))*(~t>>6-(t>>14&1)&127)/128*!!(~t>>14&63)+(63-(t>>16&15)&((~t>>14&7?30-10*((t>>17&1)+(t>>11&1)-(t>>13&1)*(t>>19&3)):27-2*(t>>13&1))*t/40^t>>8))+!!(t>>21&3)*!(t>>11&7)*(t>>7&15)*159;
   return byteToSample(v);
 }
+function interstellarTrack(t){
+  let b,gT,k,len,gen,sqr,tri,echo,rise,fade,drop,pan,arp1,arp2,bass,lead,T,out,w,r;
+  const sin=Math.sin,abs=Math.abs,int=Math.floor;
+  t=44100*(b=t/44100),gT=110*.08*b,b*=1.1,len=224,k=b/len&1?5:4,b%=len,
+  gen=(del,pitch,vibr,arp=0,k1=5,k2=5)=>(t+vibr*sin(5*(T=gT-del)))*2**(pitch+('6202'[(T>>5)%4]-3)/12+(arp&&int((w=abs((T/arp&31)-17))/k2)-(0b0001010110001010>>w%k1*k&15)/12)),
+  sqr=x=>(x&128)/4,
+  tri=x=>abs((x&255)-128)/4,
+  echo=(fn,ch,vol,pan,delay,pitch,vibr,arp,k1,k2)=>(out=0,vol&&Array(5).fill().map((e,i)=>out+=(!i||ch==i%2||1-pan)*fn(gen(delay*i,pitch,vibr,arp,k1,k2))/(i+1)),vol*out),
+  rise=(start,len,x=1)=>b<start?0:b<start+len?(b-start)/len:x,
+  fade=(start,len)=>b<start?1:b<start+len?1-(b-start)/len:0,
+  drop=(tempo,hold)=>1-gT%tempo/hold,
+  pan=(ch,vol,pan=.5)=>vol*(abs((b+4*ch)%8/4-1)-pan)+1,
+  arp1=(ch,v)=>1.2*(echo(sqr,ch,rise(0,8,fade(32,32)),.6,2+rise(8,24,1.2),1,v,1)+echo(tri,ch,rise(32,16,fade(64,16)),1,3,1,2*v,1)+echo(sqr,ch,rise(64,8,fade(96,32)),.2,3,1,v,1,4)),
+  arp2=(ch,v)=>1.2*drop(2,4)*echo(sqr,ch,rise(112,32,fade(160,32)),.5,3,0,v,2,4,4)+1.5*drop(2,4+8*rise(176,16))*echo(tri,ch,rise(144,16,fade(192,32)),0,3,1,v,2),
+  bass=(ch,v)=>rise(12,20,fade(128,96))*(.7*sqr(gen(0,-1,v))+.2*sqr(gen(0,-2,v))),
+  lead=ch=>fade(192,32)*(.7*echo(sqr,ch,rise(24,32),.5,3,1,14,8)+echo(tri,ch,rise(80,16),.5,3,1,16,8,4,4));
+  const L=arp1(0,10)*pan(0,r=rise(0,32))+arp2(0,10)*pan(0,.8,.8)+bass(0,12)+lead(0)*pan(1,.8);
+  const R=arp1(1,-8)*pan(1,r)+arp2(1,-8)*pan(1,.8,.8)+bass(1,-10)+lead(1)*pan(0,.8);
+  return [byteToSample(L),byteToSample(R)];
+}
 const FADE_SECONDS = 1.6;
 class BytebeatProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors(){
@@ -3402,14 +3282,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
   }
   constructor(){
     super();
-    this.gains={atmo:0,interplanetary:1,soi:0};
-    this.targetGains={atmo:0,interplanetary:1,soi:0};
-    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0;
+    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0}; 
+    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0}; 
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
-        this.targetGains={atmo:0,interplanetary:0,soi:0};
+        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0}; 
         this.targetGains[d.value]=1;
       }
     };
@@ -3419,14 +3299,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate;
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate; 
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
         if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
         else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
       }
-      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi;
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; 
       let l=0,r=0;
       if(this.gains.atmo>0.0005){
         const s=atmoTrack(Math.floor(this.tfAtmo));
@@ -3440,6 +3320,10 @@ class BytebeatProcessor extends AudioWorkletProcessor {
         const s=soiTrack(Math.floor(this.tfSoi))*this.gains.soi;
         l+=s; r+=s;
       }
+      if(this.gains.interstellar>0.0005){
+        const s=interstellarTrack(Math.floor(this.tfInterstellar));
+        l+=s[0]*this.gains.interstellar; r+=s[1]*this.gains.interstellar;
+      }
       L[i]=Math.max(-1,Math.min(1,l*v));
       R[i]=Math.max(-1,Math.min(1,r*v));
     }
@@ -3452,16 +3336,19 @@ let musicCtx=null, musicNode=null, musicVolume=0.35, musicLastState=null, musicS
 function currentMusicState(){
   const sh=activeShip();
   if(sh&&sh.status==='flying'){
-    if(sh._domBody) return sh._inAtmo?'atmo':'soi';
-    return 'interplanetary';
+    if(sh._domBody&&sh._domBody!==SUN_BODY) return sh._inAtmo?'atmo':'soi';
+    if(sh._domBody===SUN_BODY) return 'interplanetary';
+    return 'interstellar';
   }
   return 'interplanetary';
 }
+const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System'};
 function updateMusicState(){
   if(!musicNode) return;
   const st=currentMusicState();
   if(st!==musicLastState){
     musicLastState=st;
+    if(SONG_NAMES[st]) showToast('Song Playing: '+SONG_NAMES[st]);
     musicNode.port.postMessage({type:'state',value:st});
   }
 }
@@ -3493,8 +3380,7 @@ function setMusicVolume(v){
     p.linearRampToValueAtTime(musicVolume,now+0.05);
   }
 }
-// Autoplay policies require a user gesture before audio can start —
-// kick things off on the first click/keypress anywhere in the page.
+// gesture unlocks audio autoplay
 function primeMusicOnGesture(){
   startMusicEngine();
   if(musicCtx&&musicCtx.state==='suspended') musicCtx.resume();
@@ -3526,19 +3412,17 @@ function loop(now){
     if(keys['arrowright']||keys['e']) sh.angle+=rotSpeed*realDt;
   }
 
-  // --- SOI entry/exit detection: reset warp to 1× as QoL (player can re-raise after) ---
+  // soi entry exit detection reset warp
   ships.forEach(s=>{
     if(s._prevDomBody===undefined) s._prevDomBody=s._domBody;
     if(s.status==='flying'&&s._domBody!==s._prevDomBody){
-      if(warp>1) setWarp(1);
+      if(bodyDepth(s._domBody)>=2){ if(warp!==0) setWarp(0); } // this pauses the game if moon
+      else if(warp>1) setWarp(1);
     }
     s._prevDomBody=s._domBody;
   });
 
-  // Nav Beacon: auto-drop timewarp just before the planned burn window. The
-  // plan is a single frozen (time, Δv) pair, so a big warp step could carry
-  // the ship straight through the moment without the player ever getting a
-  // chance to execute it. Same idea as the SOI-transition drop above.
+  // nav beacon auto drop timewarp before
   if(cheats.navBeacon&&navDeltaV&&navTargetPlanet&&sh&&sh.status==='flying'&&warp>1&&!navBurnWarpDropped){
     const projected=simTime+realDt*warp;
     if(projected>=navDeltaV.burnSimTime){
@@ -3548,17 +3432,13 @@ function loop(now){
     }
   }
 
-  // Nav Beacon: lock out 1× while a coast is being force-interpolated. 1× is
-  // the only warp where the engine can turn on, and manual flight is
-  // meaningless while the plan overwrites the ship's position every frame —
-  // it would just invite the player to think they're steering. Keep warp at
-  // 5×+ for the two forced legs; 1× is only available during the actual burn.
+  // nav beacon lock out 1 coast
   const NAV_FORCED_MIN_WARP=5;
   if(activeNavForcedPath()&&warp<NAV_FORCED_MIN_WARP) setWarp(NAV_FORCED_MIN_WARP);
 
   const maxAllowed=computeMaxAllowedWarp();
-  if(warp>maxAllowed) setWarp(largestAllowedLevel(maxAllowed));
-  updateWarpButtonsUI(maxAllowed, activeNavForcedPath()?NAV_FORCED_MIN_WARP:1);
+  if(warp>maxAllowed) setWarp(maxAllowed);
+  updateWarpButtonsUI(maxAllowed, activeNavForcedPath()?NAV_FORCED_MIN_WARP:0);
 
   const simSeconds=realDt*warp;
   const tStart=simTime;
@@ -3594,15 +3474,7 @@ function loop(now){
     saveShips();
   }
 
-  // Nav Beacon: snap the ship onto the frozen planned coast path each frame.
-  // Fixes timewarp jitter (see computeNavPlanCoastPath) — stepSimSeconds'
-  // approximation can drift from the plan at extreme warp, so we override its
-  // result while coasting (forcing pauses only during the actual burn, which
-  // the player flies for real). We check both tStart and the post-step
-  // simTime because one huge warp step can jump straight past a leg's end;
-  // checking tStart too keeps forcing active through to that end instead of
-  // treating the leg as already over. sampleNavPlanCoastPath() clamps to the
-  // path's last sample, so this always lands the ship on the correct point.
+  // nav beacon snap ship onto frozen
   const navForcedPath=activeNavForcedPath(tStart)||activeNavForcedPath();
   if(navForcedPath){
     const planned=sampleNavPlanCoastPath(navForcedPath,simTime);
@@ -3612,8 +3484,7 @@ function loop(now){
     }
   }
 
-  // Camera follows the active ship, including while landed.
-  // Rotate camera to match ship heading when the cheat is enabled.
+  // camera follows active ship; rotates to heading only if camRotate cheat is on
   if(sh&&sh.status!=='crashed'){
     camera.x=sh.pos.x;
     camera.y=sh.pos.y;
@@ -3641,12 +3512,7 @@ function loop(now){
   }
   updateZoomButtons();
 
-  // --- Nav Beacon: mark navigation complete on SOI entry ---
-  // Hand control back as soon as the ship actually enters the target
-  // planet's sphere of influence, rather than waiting for atmosphere entry —
-  // that gave the player almost no time to line up a landing. Clearing the
-  // plan here drops the forced coast and the warp lock the same frame, so
-  // the player gets 1× back right away with the whole SOI to work with.
+  // nav beacon mark navigation complete soi
   if(cheats.navBeacon&&navTargetPlanet&&sh&&sh.status==='flying'
      &&sh._domBody===navTargetPlanet){
     showToast('Nav Beacon: entered '+navTargetPlanet.name+'\u2019s sphere of influence — autopilot disengaged.');
@@ -3655,13 +3521,7 @@ function loop(now){
     el('navArrowPanel').style.display='none';
   }
 
-  // Nav Beacon: detect a missed intercept and clear the stale plan.
-  // If the planned arrival time has passed but the ship is still flying, a
-  // real hit would already have ended 'flying' via normal collision/landing
-  // code — so this was a miss. Without this check the plan gets stuck forever
-  // (burn marked complete, forcing stops once simTime passes arrival, warp
-  // free to drop) with no way forward but re-clicking the planet. Reset it so
-  // the HUD/warp return to normal and Nav Beacon can be re-issued.
+  // nav beacon detect missed intercept clear
   if(cheats.navBeacon&&navBurnDone&&navDeltaV&&sh&&sh.status==='flying'
      &&simTime>=navDeltaV.burnSimTime+navDeltaV.interceptT){
     showToast('Nav Beacon: intercept with '+(navTargetPlanet?navTargetPlanet.name:'target')+' missed — plan cleared.');
@@ -3670,16 +3530,12 @@ function loop(now){
     el('navArrowPanel').style.display='none';
   }
 
-  // Nav Beacon: the 15s ballistic preview is recomputed every frame from the
-  // ship's current position/velocity (scaled to 15 real-life seconds
-  // regardless of warp). The intercept plan (navDeltaV) is a separate frozen
-  // calculation — it already searched a window of departure times for the
-  // lowest-Δv burn, so recomputing it on a timer would discard that work. It
-  // only changes when the player clicks the planet again.
+  // nav beacon 15s ballistic preview recomputed
   if(cheats.navBeacon){
     const nsh=activeShip();
     if(nsh&&nsh.status==='flying'){
-      navBeaconPath=computeNavBeaconPath(nsh,simTime,warp);
+      const beaconThrottle=warp>1000?Math.min(20,Math.ceil(warp/1000)):1;
+      if(frameCount%beaconThrottle===0) navBeaconPath=computeNavBeaconPath(nsh,simTime,warp);
     } else {
       navBeaconPath=[];
       if(!nsh){
