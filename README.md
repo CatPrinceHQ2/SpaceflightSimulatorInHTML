@@ -1,4 +1,4 @@
-- **Easily Moddable** Just change numbers around. It does stuff. Claude wrote all the code comments for me. Couldn't be bothered to do it myself.
+- **Easily Moddable** Just change numbers around. It does stuff. Claude wrote some of the code comments for me. Couldn't be bothered to do it myself.
 
 # SpaceflightSimulatorInHTML
 Spaceflight Simulator in HTML. Thats literally what this is. It's ~3600 lines of code. The code is ~50% AI generated. I wrote lots of the code originally, but had Claude polish it. It's also in beta because it's sort of missing a ton of features.
