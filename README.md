@@ -1,4 +1,4 @@
-- **Easily Moddable** Just change numbers around. It does stuff. Claude wrote some of code comments for me. Couldn't be bothered to do the rest of it myself.
+- **Easily Moddable** Just change numbers around. It does stuff. Claude wrote all the code comments for me. Couldn't be bothered to do it myself.
 
 # SpaceflightSimulatorInHTML
 Spaceflight Simulator in HTML. Thats literally what this is. It's ~3600 lines of code. The code is ~50% AI generated. I wrote lots of the code originally, but had Claude polish it. It's also in beta because it's sort of missing a ton of features.
@@ -14,15 +14,15 @@ No building or dependencies. Just open the HTML in Google or whatever.
 Spaceflight Sim has two screens:
 
 - **Build screen**. snap parts (command pods, fuel tanks, engines, RCS thrusters, parachutes, separators, docking ports, wheels, nose cones) onto a grid to design a rocket. Live stats update as you build: dry mass, fuel mass, total thrust, thrust-to-weight ratio, and an estimated Δv via the Tsiolkovsky rocket equation. You can't launch until the design has a pod, an engine, and TWR ≥ 1.
-- **Flight screen** You then launch into a 9-planet solar system (Mercury through Pluto, orbiting a central sun) and fly using my BS interpretation of two-body gravity, atmospheric drag, staging, docking, and time warp up to 1,000,000×. This is all coded somewhat crappily, but, it works and is fun to play. Just uh, ignore how Nav Beacon paths you to planets. I couldn't figure out the math.
+- **Flight screen** You then launch into a 9-planet solar system (Mercury through Pluto, orbiting a central sun) with 26 moons scattered around them (Earth's Moon, Mars' two, the big Jupiter and Saturn and Uranus and Neptune moons, even Pluto's Charon) and fly using my BS interpretation of two-body gravity, atmospheric drag, staging, docking, and time warp up to 1,000,000×. This is all coded somewhat crappily, but, it works and is fun to play. Just uh, ignore how Nav Beacon paths you to planets. I couldn't figure out the math.
 
 ## Core systems
-- **Orbital mechanics** N-body-adjacent simulation where each ship is pulled by the gravity of whichever body currently dominates it through the function (`findDominantBody`), with planets themselves moving on fixed circle orbits. If you want to edit that, go to the (`planetPositionAt`) variable. Distances, planet radii, and gravity are gameplay-tuned rather than physically accurate, this is game, not a real simulator, with each scaling factor (`GM_SUN_MULT`, `PLANET_GM_MULT`, `ORBIT_PERIOD_CALIBRATION_MULT`, `SOI_SCALE`) isolated so tuning one doesn't warp the others.
+- **Orbital mechanics** N-body-adjacent simulation where each ship is pulled by the gravity of whichever body currently dominates it through the function (`findDominantBody`), with planets themselves moving on fixed circle orbits, and moons orbiting their planet the same way (so gravity nests sun -> planet -> moon). If you want to edit that, go to the (`planetPositionAt`) variable. Distances, planet radii, and gravity are gameplay-tuned rather than physically accurate, this is game, not a real simulator, with each scaling factor (`GM_SUN_MULT`, `PLANET_GM_MULT`, `ORBIT_PERIOD_CALIBRATION_MULT`, `SOI_SCALE`, `MOON_SOI_MULT`) isolated so tuning one doesn't warp the others. Pluto and Charon are even set up as a lil binary pair (`binaryAnchorPos`) so they orbit a shared point instead of Charon just circling Pluto like every other moon. Because why not.
 - **Adaptive time warp** up to 1,000,000×, automatically clamped near atmospheres/planets to avoid tunneling through terrain, with sub-stepped integration (`stepSimSeconds`) so high warp stays somewhat stable. The path the rocket takes is irreversibly changed by timewarp though. I also couldn't figure out the math to simplify rocket pathing math without changing how trajectories work, so, it's sort of garbage and can change your pathing but I guess it works.
 - **Staging & fuel routing** fuel tanks feed engines through a BFS over physically touching parts. You can edit this through (`computeEngineConnections`); separators act as hard walls in that graph, so cutting a rocket with a separator genuinely isolates each stage's fuel pool. Seperators SHOULD delete the part of the rocket with the least amount of command pods. Its random if both sides have one. So put the command pods where you want to keep stuff.
 - **Docking** ships with docking ports can merge in flight through function (`mergeShips`) when two ports meet face-to-face within a snap radius, re-parenting one ship's parts onto the other's grid. This is janky as crap and there isn't a good way to navigate to another rocket. YET. This is beta.
 - **Nav Beacon autopilot (cheat)** — given a target planet, computes a minimum-Δv intercept window (`findBestInterceptWindow`), draws a burn marker and predicted path. The math is so confusing that i lowkey just made it give you velocity in the direction of the planet so the path looks stupid. Thats why it's a cheat. It's insanely hard to path to planets without this because you actually have to find the path which even the game's math cannot.
-- **Procedural soundtrack**. three bytebeat tracks I lowkey stole from r/bytebeat. (atmospheric flight / in a planet's SOI / interplanetary coasting) synthesized sample-by-sample inside an `AudioWorklet`, crossfading based on where the active ship is. Allows for ultra compressed audio in just text.
+- **Procedural soundtrack**. four bytebeat tracks I lowkey stole from r/bytebeat. (atmospheric flight / in a planet or moon's SOI / interplanetary coasting / floating around in deep interstellar space with no dominant body) synthesized sample-by-sample inside an `AudioWorklet`, crossfading based on where the active ship is. Allows for ultra compressed audio in just text.
 - **Persistence** active ships and saved rocket blueprints are stored in `localStorage`, so a session SHOULD survive a page reload. Sometimes this can get corrupt. Careful.
 - **Multi-ship management** fly and switch between multiple simultaneously-active ships, each independently simulated.
 
@@ -31,9 +31,10 @@ Spaceflight Sim has two screens:
 | Action | Input |
 |---|---|
 | Place / remove part | Click / right-click (build screen) |
-| Rotate part | `R` |
+| Rotate part | `R` (build screen) |
 | Pan / zoom | Drag / scroll |
 | Throttle, warp, staging, chutes | On-screen HUD controls |
+| Rotate ship (in flight) | `Arrow Left/Right` or `Q` / `E` |
 | Drive while landed | `A` / `D` (requires wheels) |
 | RCS strafe | `WASD` (requires RCS thrusters) |
 
