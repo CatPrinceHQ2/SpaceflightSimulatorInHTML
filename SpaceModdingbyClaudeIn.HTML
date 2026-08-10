@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spaceflight Sim by CatPrinceHQ</title>
+<title>Spaceflight Sim by CatPrinceHQ (Modding Example by Claude)</title>
 <style>
   :root{
     --primary:#1A1A1A;
@@ -92,6 +92,13 @@
   .part-card .pname{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:var(--sp-2);}
   .part-card .swatch{width:11px;height:11px;border:1px solid var(--primary);flex-shrink:0;}
   .part-card .pstats{font-size:10.5px;color:#555;margin-top:var(--sp-2);line-height:1.55;}
+  /* ===== MOD: highlight for modder-added parts, see PARTS/buildPalette() in the script ===== */
+  .part-card.modded{border-color:#e6c300;border-width:2px;background:#fff9d6;box-shadow:inset 0 0 0 1px #e6c300;}
+  .part-card.modded.selected{background:#fff0ea;border-color:var(--accent);box-shadow:none;}
+  .part-card.modded:hover{border-color:#c9a900;}
+  .part-card .mod-badge{background:#ffd400;color:#1a1a1a;font-size:9px;font-weight:800;padding:1px 5px;letter-spacing:.03em;border-radius:3px;}
+  body.dark-mode .part-card.modded{background:#3a3410;border-color:#e6c300;}
+  body.dark-mode .part-card.modded.selected{background:#3a2418;}
 
   .float-stats{top:var(--sp-5);right:var(--sp-5);width:206px;}
   .float-savedrockets{top:calc(var(--sp-5) + 216px);right:var(--sp-5);width:206px;max-height:220px;overflow-y:auto;}
@@ -247,7 +254,7 @@
 <div id="app">
   <header id="appHeader">
     <button id="headerCollapseBtn" title="Collapse header">▾ Collapse</button>
-    <h1>Spaceflight Sim</h1>
+    <h1>Spaceflight Sim <span style="font-weight:400;font-size:13px;color:#8a7000;">— modding example by Claude</span></h1>
     <div class="header-actions">
       <div class="vol-ctl" title="Music volume">
         <span class="vol-icon" id="volIcon">🔊</span>
@@ -413,6 +420,22 @@
 <div id="toastMsg"></div>
 
 <script>
+/* ============================================================
+   MODDING EXAMPLE — changes made by Claude to demonstrate how
+   easily this game can be modded. Search for "MOD:" comments
+   to find every change. Summary:
+     1. Two new planets (Zorvath, Kelbo) + one new moon (Glib)
+        added purely as data entries in PLANET_DEFS / MOON_DEFS.
+        No engine code changed — orbits, gravity, SOIs, rendering,
+        and navigation all pick them up automatically.
+     2. Two new build-menu parts (Ion Engine, Fuel Tank — XL)
+        added as data entries in PARTS, reusing the existing
+        'engine' and 'tank' types so no simulation code changed.
+     3. A `modded:true` flag on those parts drives a yellow
+        highlight + "NEW" badge in the build menu (buildPalette()
+        + the .part-card.modded CSS rule) so old and new parts
+        are easy to tell apart at a glance.
+   ============================================================ */
 (function(){
 "use strict";
 const el = id => document.getElementById(id);
@@ -486,6 +509,17 @@ const PLANET_DEFS = [
   {key:'uranus', name:'Uranus', parent:'sun',color:'#a7dede',groundColor:null,     radius:440000,surfG:19,  distAU:19.191,periodDays:30687,  solid:false,atmo:true,  atmoColor:'#70c8c8', eccMod:0.954},
   {key:'neptune',name:'Neptune',parent:'sun',color:'#4f6bf6',groundColor:null,     radius:420000,surfG:21,  distAU:30.07, periodDays:60190,  solid:false,atmo:true,  atmoColor:'#3355cc', eccMod:0.990},
   {key:'pluto',  name:'Pluto',  parent:'sun',color:'#c9b8a8',groundColor:'#cfcfcf',radius:18000, surfG:1.3, distAU:39.48, periodDays:90560,  solid:true, atmo:false, eccMod:0.751},
+
+  // ===== MOD: custom solar system additions by Claude =====
+  // Two brand new planets tacked onto the end of PLANET_DEFS. Nothing else in the
+  // engine needed to change — planets/moons are fully data-driven (see PLANETS/MOONS
+  // build code below), so this is the entire "add a planet" recipe for modders.
+  // Zorvath: a lurid purple gas giant sitting way out past Pluto on a wildly eccentric
+  // orbit (eccMod 0.18 -> ecc ~0.82) so it swings from a tight perihelion to a huge aphelion.
+  {key:'zorvath',name:'Zorvath',parent:'sun',color:'#b34fff',groundColor:null,     radius:610000,surfG:58,  distAU:52.4, periodDays:238000, solid:false,atmo:true,  atmoColor:'#7a1fbf', eccMod:0.18},
+  // Kelbo: a tiny, absurdly dense rock even further out with almost no gravity of its own
+  // but a huge surfG relative to its size for a "neutron pebble" vibe — deliberately silly values.
+  {key:'kelbo',  name:'Kelbo',  parent:'sun',color:'#ff3366',groundColor:'#7a0f28',radius:6000,  surfG:42,  distAU:71.9, periodDays:410000, solid:true, atmo:false, eccMod:0.62},
 ];
 
 // Moons are calculated based on the home planet multiplicatively. I dont know why I did it this specific way. Claude could've doneit better probably. Its all not standard but makes sense to me. Sorry modders.
@@ -523,6 +557,10 @@ const MOON_DEFS = [
   {key:'nix',     name:'Nix',     parent:'pluto',color:'#a4a4a4',groundColor:'#848484',radiusMod:0.02104,distMod:40.99,surfG:0.003,eccMod:0.99800,solid:true,atmo:false},
   {key:'kerberos',name:'Kerberos',parent:'pluto',color:'#909090',groundColor:'#707070',radiusMod:0.00799,distMod:48.64,surfG:0.003,eccMod:0.99670,solid:true,atmo:false},
   {key:'hydra',   name:'Hydra',   parent:'pluto',color:'#989898',groundColor:'#787878',radiusMod:0.02314,distMod:54.5, surfG:0.003,eccMod:0.99410,solid:true,atmo:false},
+
+  // MOD: one moon for our new planet Zorvath — moons just need parent to match a key
+  // defined up in PLANET_DEFS, everything downstream picks it up automatically.
+  {key:'glib',    name:'Glib',    parent:'zorvath',color:'#e8c8ff',groundColor:'#c090e0',radiusMod:0.015,   distMod:8.4,   surfG:0.9,   eccMod:0.55,   solid:true,atmo:false},
 ];
 
 //Sun is root and has no parent. so i made it null. 
@@ -684,6 +722,14 @@ const PARTS = {
   coneS: {id:'coneS',name:'Nose Cone — Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',dragMult:0.7},
   coneM: {id:'coneM',name:'Nose Cone — Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',dragMult:0.55},
   coneL: {id:'coneL',name:'Nose Cone — Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',dragMult:0.4},
+
+  // ===== MOD: two new parts by Claude, flagged modded:true so the palette can =====
+  // ===== highlight them in yellow — see buildPalette() below.                =====
+  // Ion Engine: low thrust, very fuel-efficient — same 'engine' type as the stock
+  // engines so all the existing thrust/fuel-burn code just works on it unmodified.
+  engI:  {id:'engI', name:'Ion Engine',          w:2,h:3,dryMass:280, fuel:0,    thrust:160000,  fuelRate:4,    color:'#9be8ff',type:'engine',modded:true},
+  // Fuel Tank XL: a bigger stock tank variant, same 'tank' type.
+  tankXL:{id:'tankXL',name:'Fuel Tank — XL',     w:4,h:10,dryMass:1600,fuel:14000,thrust:0,      fuelRate:0,   color:'#6f7684',type:'tank',modded:true},
 };
 const PART_LIST = Object.values(PARTS);
 
@@ -888,7 +934,7 @@ function buildPalette(){
   wrap.innerHTML='<h3>Parts</h3>';
   PART_LIST.forEach(p=>{
     const card=document.createElement('div');
-    card.className='part-card'+(p.id===selectedPartId?' selected':'');
+    card.className='part-card'+(p.id===selectedPartId?' selected':'')+(p.modded?' modded':'');
     let statsHtml=`${p.w}×${p.h} cells &nbsp;·&nbsp; mass ${p.dryMass}`;
     if(p.type==='tank') statsHtml+=`<br>fuel capacity ${p.fuel}`;
     if(p.type==='engine') statsHtml+=`<br>thrust ${p.thrust.toLocaleString()} &nbsp;·&nbsp; burn ${p.fuelRate}/s`;
@@ -898,7 +944,9 @@ function buildPalette(){
     if(p.type==='rcs') statsHtml+=`<br>WASD strafe thrust &nbsp;·&nbsp; thrust ${p.thrust.toLocaleString()}`;
     if(p.type==='wheel') statsHtml+=`<br>A/D drive while landed`;
     if(p.type==='cone') statsHtml+=`<br>reduces air drag when mounted on a tank`;
-    card.innerHTML=`<div class="pname"><span class="swatch" style="background:${p.color}"></span>${p.name}</div>
+    // MOD: modded parts get a "NEW" badge next to their name — the yellow styling itself
+    // lives in the .part-card.modded CSS rule so it also works in dark mode.
+    card.innerHTML=`<div class="pname"><span class="swatch" style="background:${p.color}"></span>${p.name}${p.modded?' <span class="mod-badge">NEW</span>':''}</div>
       <div class="pstats">${statsHtml}</div>`;
     card.onclick=()=>{ selectedPartId=p.id; buildPalette(); };
     wrap.appendChild(card);
