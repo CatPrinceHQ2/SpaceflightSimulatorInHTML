@@ -463,7 +463,7 @@ const SOI_SCALE = 0.4;
 const ATMO_DRAG_K = 0.05;
 const PARACHUTE_DRAG_MULT = 40;
 const GAS_GIANT_CRUSH_DEPTH = 0.4;
-const WARP_LEVELS = [0,0.1,0.5,1,5,25,100,1000,10000,100000,1000000]; //new warp levels bc landing on tiny little moons is hard at 1x
+const WARP_LEVELS = [0,0.1,0.5,1,5,25,100,1000,10000,100000,1000000,1000000000]; //new warp levels bc landing on tiny little moons is hard at 1x
 // Extra moon-only SOI scale — Hill-sphere formula makes moon SOIs too tight to fly in otherwise
 const MOON_SOI_MULT = 2.5; //Moon sois were small so i just put this in to make it good
 // orbit ellipses drawn their screen size
@@ -582,10 +582,104 @@ const STAR_BODIES = [SUN_BODY];
 //everybody includes the sun though.
 const ALL_BODIES = [...STAR_BODIES, ...PLANETS];
 
+// add alpha centauri anchor
+
+const ALPHA_CEN_SYSTEM_DIST_AU = 17500;
+const ALPHA_CEN_SYSTEM_Y_AU = 4000;
+const ALPHA_CEN_ANCHOR_POS = {x:ALPHA_CEN_SYSTEM_DIST_AU*AU, y:ALPHA_CEN_SYSTEM_Y_AU*AU};
+
+//Gravity vals
+const GM_ALPHA_CEN_A = 1.100*GM_SUN;              
+const GM_ALPHA_CEN_B = 0.907*GM_SUN;              
+const GM_ALPHA_CEN_AB = GM_ALPHA_CEN_A+GM_ALPHA_CEN_B; 
+const GM_PROXIMA = 0.122*GM_SUN;           
+
+//Barycenter calculation. Invisible
+const AC_ANCHOR = {key:'ac_anchor', name:'Alpha Centauri Barycenter', parent:null, pos:ALPHA_CEN_ANCHOR_POS, radius:0, solid:false, atmo:false};
+BODIES_BY_KEY['ac_anchor']=AC_ANCHOR;
+
+// use pre existing shit to alpha centauri binary
+const ALPHA_CEN_AB_DIST_AU = 11.85;
+const ALPHA_CEN_AB_DISTANCE = ALPHA_CEN_AB_DIST_AU*AU;
+const ALPHA_CEN_AB_ECC = 0.518;      
+const ALPHA_CEN_AB_OMEGA = Math.sqrt(GM_ALPHA_CEN_AB/Math.pow(ALPHA_CEN_AB_DISTANCE,3));
+
+const ALPHA_CEN_A = {
+  key:'alphaCenA', name:'Alpha Centauri A (Rigil Kentaurus)',
+  parent:'alphaCenB', binaryMirror:true, //uses binary mirror function. epic
+  color:'#fff3d6', groundColor:null,    
+  radius:SUN_RADIUS*1.22,
+  GM:GM_ALPHA_CEN_A, GMbase:GM_ALPHA_CEN_A,
+  solid:false, atmo:false,
+  distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
+  soi:300*AU*12,
+};
+const ALPHA_CEN_B = {
+  key:'alphaCenB', name:'Alpha Centauri B (Toliman)',
+  parent:'alphaCenA', barycenterParent:'ac_anchor', 
+  color:'#ffb347', groundColor:null,     
+  radius:SUN_RADIUS*0.86,                
+  GM:GM_ALPHA_CEN_B, GMbase:GM_ALPHA_CEN_B,
+  solid:false, atmo:false,
+  distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
+  soi:220*AU*12, 
+};
+BODIES_BY_KEY['alphaCenA']=ALPHA_CEN_A;
+BODIES_BY_KEY['alphaCenB']=ALPHA_CEN_B;
+STAR_BODIES.push(ALPHA_CEN_A, ALPHA_CEN_B);
+
+// proxima
+const PROXIMA_DIST_AU = 300; 
+const PROXIMA_DISTANCE = PROXIMA_DIST_AU*AU;
+const PROXIMA_ECC = 0.50; 
+const PROXIMA_OMEGA = Math.sqrt(GM_ALPHA_CEN_AB/Math.pow(PROXIMA_DISTANCE,3)); 
+const PROXIMA_RADIUS = SUN_RADIUS*0.15; 
+const PROXIMA_SOI = Math.max(PROXIMA_RADIUS*3, PROXIMA_DISTANCE*Math.cbrt(GM_PROXIMA/(3*GM_ALPHA_CEN_AB))*SOI_SCALE);
+
+const PROXIMA = {
+  key:'proxima', name:'Proxima Centauri (Alpha Centauri C)',
+  parent:'ac_anchor',
+  color:'#c0392b', groundColor:null,
+  radius:PROXIMA_RADIUS,
+  GM:GM_PROXIMA, GMbase:GM_PROXIMA,
+  solid:false, atmo:false,
+  distance:PROXIMA_DISTANCE, ecc:PROXIMA_ECC, omega:PROXIMA_OMEGA, initialAngle:Math.PI*0.5,
+  soi:PROXIMA_SOI,
+};
+BODIES_BY_KEY['proxima']=PROXIMA;
+STAR_BODIES.push(PROXIMA);
+
+// Proxima planets
+//copy same code as sun planets
+const PROXIMA_PLANET_DEFS = [
+  {key:'proximaD', name:'Proxima Centauri d', color:'#8a7060', groundColor:'#6d5748', radius:150000*0.81, surfG:8.9, distAU:0.0100, solid:true, atmo:false, eccMod:0.99},
+  {key:'proximaB', name:'Proxima Centauri b', color:'#9c7a5c', groundColor:'#7a5f47', radius:150000*1.03, surfG:11.3, distAU:0.0100*1.65, solid:true, atmo:true, atmoFrac:0.2, atmoColor:'#a88f77', eccMod:0.99},
+];
+const PROXIMA_PLANETS = PROXIMA_PLANET_DEFS.map((p,i)=>{
+  const distance = p.distAU*AU;
+  const GM = p.surfG*p.radius*p.radius*PLANET_GM_MULT;
+  const GMbase = p.surfG*p.radius*p.radius;
+  const omega = Math.sqrt(PROXIMA.GM/Math.pow(distance,3)); // real life orbit rate so d is moving fast as shiiii
+  const initialAngle = (i/PROXIMA_PLANET_DEFS.length)*Math.PI*2;
+  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*PROXIMA.GM))*SOI_SCALE)*4;
+  const ecc = eccFromMod(p.eccMod);
+  const body = Object.assign({},p,{parent:'proxima',distance,GM,GMbase,omega,initialAngle,soi,ecc});
+  BODIES_BY_KEY[body.key]=body;
+  return body;
+});
+PLANETS.push(...PROXIMA_PLANETS);
+ALL_BODIES.push(ALPHA_CEN_A, ALPHA_CEN_B, PROXIMA, ...PROXIMA_PLANETS);
+const ALPHA_CEN_MAX_EXTENT = (ALPHA_CEN_AB_DISTANCE+Math.max(ALPHA_CEN_A.soi,ALPHA_CEN_B.soi)+PROXIMA_DISTANCE+PROXIMA_SOI)*1.5;
+
 // SOI nesting depth (sun=0, planet=1, moon=2) — gates timewarp caps and auto-pause
 function bodyDepth(b){ // warp cap based on soi type if planet or moon or sun or whatever
-  let d=0, cur=b;
-  while(cur&&cur.parent){ d++; cur=BODIES_BY_KEY[cur.parent]; }
+  let d=0, cur=b, guard=0;
+ // cap for inf loop (binary stars caused infinity depth)
+  while(cur&&cur.parent&&guard<32){
+    const next=BODIES_BY_KEY[cur.parent];
+    if(next&&next.parent===cur.key) break;
+    d++; cur=next; guard++;
+  }
   return d;
 }
 
@@ -635,7 +729,7 @@ function binaryPairVelocity(p,partner,t){
 }
 
 function planetPositionAt(p,simTime){
-  if(p.parent===null) return SUN_POS; //Sun doesnt orbit anything and it doesnt have a parent as stated earlier
+  if(p.parent===null) return p.pos||SUN_POS; //Sun doesnt orbit anything and it doesnt have a parent as stated earlier //Edit stuff can carry a fixed `pos` (e.g. the far-away Alpha Centauri anchor) instead of being around the Sun's origin
   const parent=BODIES_BY_KEY[p.parent];
   if(parent.parent===p.key) return binaryPairPosition(p,parent,simTime);
   const parentPos=planetPositionAt(parent,simTime);
@@ -655,6 +749,11 @@ function planetVelocityAt(p,t){
 
 //The smallest soi you are in is the one that effects you and all others get dropped or should get dropped - edit yes this works as intended
 function findDominantBody(pos,t){
+  const dSun=Math.hypot(pos.x-SUN_POS.x,pos.y-SUN_POS.y);
+  if(dSun>SUN_BODY.soi){
+    const dAC=Math.hypot(pos.x-ALPHA_CEN_ANCHOR_POS.x,pos.y-ALPHA_CEN_ANCHOR_POS.y);
+    if(dAC>ALPHA_CEN_MAX_EXTENT) return null;
+  }
   let best=null;
   for(const p of ALL_BODIES){
     const ppos=planetPositionAt(p,t);
@@ -1590,6 +1689,7 @@ function buildWarpButtons(){
 }
 // Shared by the warp buttons and the telemetry readout so both always agree.
 function formatWarpLabel(w){
+  if(w>=1000000000) return (w/1000000000)+'B×';
   if(w>=1000000) return (w/1000000)+'M×';
   if(w>=1000) return (w/1000)+'k×';
   return w+'×';
@@ -1612,6 +1712,7 @@ function computeMaxAllowedWarp(){
     if(s._inAtmo){ cap=Math.min(cap,5); return; } // allow up to 5× warp inside atmospheres
     const depth=bodyDepth(s._domBody); //cap based on planet moon or sun or interstellar or wtv
     if(depth>=2) cap=Math.min(cap,100); //100x cap inside moon soi
+    else if(s._domBody===PROXIMA) cap=Math.min(cap,1000000);
     else if(depth===1) cap=Math.min(cap,10000); //and 10kx for planet soi.
   });
   return cap;
@@ -2211,9 +2312,9 @@ function checkTunnelCollisions(f,domBody,tNew){
     }
   }
 }
-function integrate(f,dt,t){
+function integrate(f,dt,t,domIn){
   const mass=f.dryMass+f.fuel;
-  const dom=findDominantBody(f.pos,t);
+  const dom=domIn!==undefined?domIn:findDominantBody(f.pos,t);
   // Are we the active ship and mouse-pull cheat is on?
   const isActive=f===activeShip();
   const doPull=cheats.mousePull&&flightMouseDown&&isActive;
@@ -2353,8 +2454,9 @@ function domSurfaceGap(dom){
   return Math.max(1,dom.dist-shrink);
 }
 //Substep optimization when not in sun SOI
-function domSubstepCap(dom){
-  return (dom&&dom.p!==SUN_BODY)?SUBSTEP_DT_MAX_SOI:SUBSTEP_DT_MAX_INTERP;
+function domSubstepCap(dom,dynMax){
+  const base=(dom&&dom.p!==SUN_BODY)?SUBSTEP_DT_MAX_SOI:SUBSTEP_DT_MAX_INTERP;
+  return dynMax>base?dynMax:base;
 }
 
 // adaptive substep sizing aim cross half
@@ -2364,10 +2466,11 @@ const SUBSTEP_DT_MAX_SOI     = 150;  // tight cap inside a planet SOI for accura
 const SUBSTEP_DT_MIN = 0.002;
 function stepSimSeconds(f,simSeconds,tStart,maxSubstepDtOverride){
   let remaining=simSeconds, t=tStart, steps=0;
+  const dynMax=simSeconds/MAX_SUBSTEPS_PER_FRAME;
   while(remaining>1e-6&&steps<MAX_SUBSTEPS_PER_FRAME&&f.status==='flying'){
     const dom=findDominantBody(f.pos,t);
     //Smaller dt max inside planet or moon soi compared to sun.
-    const maxDt=maxSubstepDtOverride!==undefined?maxSubstepDtOverride:domSubstepCap(dom);
+    const maxDt=maxSubstepDtOverride!==undefined?maxSubstepDtOverride:domSubstepCap(dom,dynMax);
     const nearest=dom
       ?domSurfaceGap(dom)
       :Math.max(1,Math.hypot(f.pos.x-SUN_POS.x,f.pos.y-SUN_POS.y)-SUN_RADIUS);
@@ -2376,7 +2479,7 @@ function stepSimSeconds(f,simSeconds,tStart,maxSubstepDtOverride){
     const speed=Math.max(1,Math.hypot(relVx,relVy));
     const capDt=Math.min(maxDt,(nearest/speed)*SUBSTEP_NEAREST_FRACTION);
     const dt=Math.min(remaining,Math.max(capDt,SUBSTEP_DT_MIN));
-    integrate(f,dt,t); t+=dt; remaining-=dt; steps++;
+    integrate(f,dt,t,dom); t+=dt; remaining-=dt; steps++;
   }
 }
 
@@ -2414,9 +2517,10 @@ function cloneShipForBeacon(ship){
 const MAX_BEACON_STEPS = 300;
 function beaconStepSimSeconds(f, simSeconds, tStart){
   let remaining=simSeconds, t=tStart, steps=0;
+  const dynMax=simSeconds/MAX_BEACON_STEPS;
   while(remaining>1e-6 && steps<MAX_BEACON_STEPS && f.status==='flying'){
     const dom=findDominantBody(f.pos,t);
-    const maxDt=domSubstepCap(dom);
+    const maxDt=domSubstepCap(dom,dynMax);
     const nearest=dom
       ?domSurfaceGap(dom)
       :Math.max(1,Math.hypot(f.pos.x-SUN_POS.x,f.pos.y-SUN_POS.y)-SUN_RADIUS);
@@ -2425,7 +2529,7 @@ function beaconStepSimSeconds(f, simSeconds, tStart){
     const speed=Math.max(1,Math.hypot(relVx,relVy));
     const capDt=Math.min(maxDt,(nearest/speed)*SUBSTEP_NEAREST_FRACTION);
     const dt=Math.min(remaining,Math.max(capDt,SUBSTEP_DT_MIN));
-    integrate(f,dt,t); t+=dt; remaining-=dt; steps++;
+    integrate(f,dt,t,dom); t+=dt; remaining-=dt; steps++;
   }
   return t-tStart; // actual sim-seconds advanced (may be < simSeconds)
 }
@@ -2694,17 +2798,68 @@ function trailPointWorldPos(p){
 // ============================================================
 // RENDER
 // ============================================================
-function drawSun(){
-  const s=worldToScreen(SUN_POS.x,SUN_POS.y);
-  const r=Math.max(1.2,SUN_RADIUS/camera.metersPerPixel);
+//arrow to point to stars
+const EDGE_ARROW_MARGIN = 30;
+const EDGE_ARROW_SIZE = 12;
+function shouldShowEdgeArrows(){
+  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  const halfDiag=Math.hypot(CW,CH)/2;
+  return camera.metersPerPixel*halfDiag>SUN_BODY.soi; //render this only if bigger than sun soi zoom
+}
+function drawEdgeArrowTo(body,t){
+  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  const pos=planetPositionAt(body,t);
+  const s=worldToScreen(pos.x,pos.y);
+  const cx=CW/2, cy=CH/2;
+  if(s.x>=EDGE_ARROW_MARGIN&&s.x<=CW-EDGE_ARROW_MARGIN&&s.y>=EDGE_ARROW_MARGIN&&s.y<=CH-EDGE_ARROW_MARGIN) return;
+  let dx=s.x-cx, dy=s.y-cy;
+  if(dx===0&&dy===0) dx=1;
+  const halfW=Math.max(1,CW/2-EDGE_ARROW_MARGIN), halfH=Math.max(1,CH/2-EDGE_ARROW_MARGIN);
+  const scale=Math.min(dx!==0?halfW/Math.abs(dx):Infinity, dy!==0?halfH/Math.abs(dy):Infinity);
+  const ax=cx+dx*scale, ay=cy+dy*scale;
+  const angle=Math.atan2(dy,dx);
+  const dist=Math.hypot(pos.x-camera.x,pos.y-camera.y);
+
+  fctx.save();
+  fctx.translate(ax,ay);
+  fctx.rotate(angle);
+  fctx.beginPath();
+  fctx.moveTo(EDGE_ARROW_SIZE,0);
+  fctx.lineTo(-EDGE_ARROW_SIZE*0.65,EDGE_ARROW_SIZE*0.62);
+  fctx.lineTo(-EDGE_ARROW_SIZE*0.65,-EDGE_ARROW_SIZE*0.62);
+  fctx.closePath();
+  fctx.fillStyle=body.color; fctx.fill();
+  fctx.lineWidth=1.5; fctx.strokeStyle='rgba(0,0,0,0.55)'; fctx.stroke();
+  fctx.restore();
+
+  const labelR=Math.hypot(dx,dy)>0?18:0;
+  const lx=ax-Math.cos(angle)*(EDGE_ARROW_SIZE+labelR), ly=ay-Math.sin(angle)*(EDGE_ARROW_SIZE+labelR);
+  fctx.save();
+  fctx.font='11px sans-serif';
+  fctx.textAlign='center'; fctx.textBaseline='middle';
+  const label=body.name+' — '+fmtDist(dist);
+  fctx.lineWidth=3; fctx.strokeStyle='rgba(0,0,0,0.75)'; fctx.strokeText(label,lx,ly);
+  fctx.fillStyle=body.color; fctx.fillText(label,lx,ly);
+  fctx.restore();
+}
+function drawEdgeArrows(t){
+  if(!shouldShowEdgeArrows()) return;
+  STAR_BODIES.forEach(st=>drawEdgeArrowTo(st,t));
+}
+
+//I regeneralized this from draw sun. now we can have multiple stars
+function drawStar(body,t){
+  const pos=planetPositionAt(body,t);
+  const s=worldToScreen(pos.x,pos.y);
+  const r=Math.max(1.2,body.radius/camera.metersPerPixel);
   const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
   if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
   const grad=fctx.createRadialGradient(s.x-r*0.3,s.y-r*0.3,r*0.05,s.x,s.y,r);
-  grad.addColorStop(0,shadeColor('#ffb020',0.3));
-  grad.addColorStop(1,shadeColor('#ffb020',-0.15));
+  grad.addColorStop(0,shadeColor(body.color,0.3));
+  grad.addColorStop(1,shadeColor(body.color,-0.15));
   fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.fillStyle=grad; fctx.fill();
   if(r>2){ fctx.lineWidth=1; fctx.strokeStyle='rgba(255,255,255,0.12)'; fctx.stroke(); }
-  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText('Sun',s.x+r+4,s.y+4); }
+  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText(body.name,s.x+r+4,s.y+4); }
 }
 
 function drawOrbitPath(p,t){
@@ -3156,11 +3311,12 @@ function render(){
     fctx.restore();
   }
 
+  STAR_BODIES.forEach(st=>drawOrbitPath(st,simTime));
   PLANETS.forEach(p=>drawOrbitPath(p,simTime));
   STAR_BODIES.forEach(st=>drawSOICircle(st,simTime)); //more stars support.
   PLANETS.forEach(p=>drawSOICircle(p,simTime));
   const visibleBodies=cullOverlappingBodies();
-  if(visibleBodies.has(SUN_BODY)) drawSun();
+  STAR_BODIES.forEach(st=>{ if(visibleBodies.has(st)) drawStar(st,simTime); });
   PLANETS.forEach(p=>{ if(visibleBodies.has(p)) drawPlanet(p,simTime,{x:camera.x,y:camera.y}); });
   drawLaunchPad();
   ships.forEach(drawShipTrail);
@@ -3168,6 +3324,7 @@ function render(){
   if(cheats.navBeacon&&navDeltaV) drawNavBurnMarker();
   ships.forEach(drawShip);
   if(cheats.navBeacon&&activeSh&&activeSh.status==='flying') drawNavArrow(activeSh);
+  drawEdgeArrows(simTime);
 
   const sh=activeSh;
   if(sh){
@@ -3255,6 +3412,15 @@ function soiTrack(t){
   const v=((t&t*91/(t>>16&1?10:12-3*(t>>17&1))/15&255)+!!(t>>20&3)*((t*6^t)*811>>9&63))*(~t>>6-(t>>14&1)&127)/128*!!(~t>>14&63)+(63-(t>>16&15)&((~t>>14&7?30-10*((t>>17&1)+(t>>11&1)-(t>>13&1)*(t>>19&3)):27-2*(t>>13&1))*t/40^t>>8))+!!(t>>21&3)*!(t>>11&7)*(t>>7&15)*159;
   return byteToSample(v);
 }
+function nightVisionTrack(tIn){
+  const st=262144;
+  const sn=Math.sin,sq=Math.sqrt,mx=Math.max,rn=Math.random;
+  const t=tIn%(16*st);
+  const r=t=>((2**([-5,-8,-6,-3][3&t>>16]/12)*t*2**([0,5,8,12][3&t>>11]/12)&127)*(-t>>7>>(3&t>>13)&31)**.6/16+63)/1.25;
+  const ti=(a,b,c)=>a*(b<t)*(c>t);
+  const v=(ti(r(t)+r(t-12288)/3+r(t-24576)/6,0,16*st)+ti(rn()*(-t>>9&31)*'01'[1&t>>14],st,14*st)+ti((t*sn(t>>2)&184)*(-t>>8&31)*'1011'[3&t>>13]/128,3*st,13*st)+ti(mx(t>>7&t>>5&63,208*sn(sq(8*(t&[16383,[4095,8191][1&t>>15]][1&t>>14])))),4*st,11*st)/6+ti((sn(t/18|t/5^t/10)*(-t>>7&31)+12)*'0110'[3&t>>14]+.45*(63&t>>3*(3&t>>10)*2**([-5,-8,-6,-3][3&t>>15]/12))+r(t/2),6*st,9*st)-12)/1.5;
+  return byteToSample(v);
+}
 function interstellarTrack(t){
   let b,gT,k,len,gen,sqr,tri,echo,rise,fade,drop,pan,arp1,arp2,bass,lead,T,out,w,r;
   const sin=Math.sin,abs=Math.abs,int=Math.floor;
@@ -3282,9 +3448,9 @@ class BytebeatProcessor extends AudioWorkletProcessor {
   }
   constructor(){
     super();
-    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0}; 
-    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0}; 
-    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; 
+    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0}; 
+    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0}; 
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
     this.port.onmessage=(e)=>{
       const d=e.data;
@@ -3299,14 +3465,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate; 
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate;
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
         if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
         else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
       }
-      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; 
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; 
       let l=0,r=0;
       if(this.gains.atmo>0.0005){
         const s=atmoTrack(Math.floor(this.tfAtmo));
@@ -3324,6 +3490,10 @@ class BytebeatProcessor extends AudioWorkletProcessor {
         const s=interstellarTrack(Math.floor(this.tfInterstellar));
         l+=s[0]*this.gains.interstellar; r+=s[1]*this.gains.interstellar;
       }
+      if(this.gains.nightVision>0.0005){
+        const s=nightVisionTrack(Math.floor(this.tfNightVision))*this.gains.nightVision;
+        l+=s; r+=s;
+      }
       L[i]=Math.max(-1,Math.min(1,l*v));
       R[i]=Math.max(-1,Math.min(1,r*v));
     }
@@ -3336,13 +3506,14 @@ let musicCtx=null, musicNode=null, musicVolume=0.35, musicLastState=null, musicS
 function currentMusicState(){
   const sh=activeShip();
   if(sh&&sh.status==='flying'){
+    if(sh._domBody===ALPHA_CEN_A||sh._domBody===ALPHA_CEN_B) return 'nightVision';
     if(sh._domBody&&sh._domBody!==SUN_BODY) return sh._inAtmo?'atmo':'soi';
     if(sh._domBody===SUN_BODY) return 'interplanetary';
     return 'interstellar';
   }
   return 'interplanetary';
 }
-const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System'};
+const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision'};
 function updateMusicState(){
   if(!musicNode) return;
   const st=currentMusicState();
