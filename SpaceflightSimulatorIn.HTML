@@ -4343,6 +4343,7 @@ function interstellarTrack(t){
 `;
 const FADE_SECONDS = 1.6;
 const BYTEBEAT_WORKLET_SRC = BYTEBEAT_TRACKS_SRC + `
+const FADE_SECONDS = ${FADE_SECONDS};
 class BytebeatProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors(){
     return [{name:'volume', defaultValue:0.35, minValue:0, maxValue:1, automationRate:'k-rate'}];
@@ -4356,7 +4357,7 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
-        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0}; 
+        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0}; 
         this.targetGains[d.value]=1;
       }
     };
