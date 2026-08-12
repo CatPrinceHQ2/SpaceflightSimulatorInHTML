@@ -1,13 +1,13 @@
 - **Easily Moddable** Just change numbers around. It does stuff. Claude wrote some of the code comments for me. Couldn't be bothered to do it myself.
 
 # SpaceflightSimulatorInHTML
-Spaceflight Simulator in HTML. Thats literally what this is. It's ~4750 lines of code. The code is ~50% AI generated. I wrote lots of the code originally, but had Claude polish it. It's also in beta because it's sort of missing a ton of features.
+Spaceflight Simulator in HTML. Thats literally what this is. It's ~4900 lines of code. The code is ~50% AI generated. I wrote lots of the code originally, but had Claude polish it. It's also in beta because it's sort of missing a ton of features.
 
 # It's spaceflight sim cuh
 
 No building or dependencies. Just open the HTML in Google or whatever.
 
-**~4,850 lines of vanilla HTML/CSS/JS in one file.** Canvas 2D rendering, a hand-rolled orbital mechanics engine, and a procedural bytebeat music system, all self-contained without need for internet. This allows bypassing of work or schooling internet blocks by creating a website in the browser with no actual website. It is all stored locally. And it's very compact, less than one megabyte.
+**~4,900 lines of vanilla HTML/CSS/JS in one file.** Canvas 2D rendering, a hand-rolled orbital mechanics engine, and a procedural bytebeat music system, all self-contained without need for internet. This allows bypassing of work or schooling internet blocks by creating a website in the browser with no actual website. It is all stored locally. And it's very compact, less than one megabyte.
 
 ## What it does
 
