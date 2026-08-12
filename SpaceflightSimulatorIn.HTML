@@ -69,7 +69,7 @@
   .mode-btn.secondary:hover{background:var(--primary);color:var(--bg);}
 
   #screens{flex:1;display:flex;min-height:0;position:relative;}
-  .screen{flex:1;display:none;min-height:0;position:relative;}
+  .screen{flex:1;display:none;min-height:0;position:relative;overflow:auto;}
   .screen.active{display:flex;}
 
   /* Main menu by Kampf.*/
@@ -270,6 +270,20 @@
     font-size:12px;padding:9px 16px;z-index:50;opacity:0;transition:opacity .3s ease;pointer-events:none;
     max-width:70%;text-align:center;
   }
+
+  /* fix for low res screen */
+  @media (max-width:900px), (max-height:650px){
+    :root{ --sp-5:10px; --sp-4:8px; }
+    .float-palette{width:170px;}
+    .float-stats,.float-savedrockets,.float-hud,.float-ships,.float-fuel,.float-cheats,.float-buildcheats{width:150px;}
+    .float-staging{width:130px;left:calc(var(--sp-5) + 180px) !important;}
+    .float-panel{font-size:11px;padding:8px !important;}
+    .float-panel h3{font-size:11.5px;}
+    .float-savedrockets{top:calc(var(--sp-5) + 180px) !important;}
+    .float-cheats{top:calc(var(--sp-5) + 140px + 150px) !important;}
+    .float-buildcheats{top:calc(var(--sp-5) + 180px + 190px) !important;}
+    .fuel-row,.cheat-row,.saved-rocket-row,.ship-row,.stage-row{font-size:10px;}
+  }
 </style>
 </head>
 <body>
@@ -284,6 +298,7 @@
       </div>
       <button class="mode-btn secondary" id="darkModeBtn">🌙 Dark Mode</button>
       <button class="mode-btn" id="toBuildBtn" style="display:none;">← Back to Build</button>
+      <button class="mode-btn secondary" id="menuBtn">☰ Menu</button>
     </div>
   </header>
 
@@ -506,8 +521,12 @@ const MAX_CONTROL_WARP = 3;
 // orbit ellipses drawn their screen size
 const ORBIT_MIN_PX = 4; //smallest screen before orbit lines are drawn on screen
 const ORBIT_MAX_PX_MULT = 50; //if it is too big it wont get drawn
-const ATMO_ZOOM_ENTER_MPP = 30;  // camera snaps to this zoom on atmosphere entry
-const ATMO_ZOOM_MAX_MPP  = 50;   // max zoom-out allowed while inside atmosphere
+const ATMO_ZOOM_REF_THICKNESS = 45000; 
+const ATMO_ZOOM_ENTER_MPP_REF = 30;  
+const ATMO_ZOOM_MAX_MPP_REF  = 50;   
+function atmoThickness(p){ return p?p.radius*(p.atmoFrac||0):ATMO_ZOOM_REF_THICKNESS; }
+function atmoZoomEnterMpp(p){ return Math.max(5,atmoThickness(p)/ATMO_ZOOM_REF_THICKNESS*ATMO_ZOOM_ENTER_MPP_REF); }
+function atmoZoomMaxMpp(p){ return Math.max(8,atmoThickness(p)/ATMO_ZOOM_REF_THICKNESS*ATMO_ZOOM_MAX_MPP_REF); }
 const MOUSE_PULL_ACCEL = 1500;   // acceleration from the mouse-pull cheat (u/s²)
 // Launch pad height above surface — shared by launch() and drawLaunchPad() so they can't drift apart
 const LAUNCH_PAD_HEIGHT = 8;
@@ -768,20 +787,26 @@ function bodyDepth(b){ // warp cap based on soi type if planet or moon or sun or
   return d;
 }
 
+// Optimized a bit.
 function planetOrbitState(p,t){
+  if(p._oscT===t) return p._oscVal;
   const e=p.ecc;
   const M=p.initialAngle+p.omega*t;
+  let result;
   if(e<=0.0001){
-    return {r:p.distance, theta:M, drdt:0, dthetadt:p.omega};
+    result={r:p.distance, theta:M, drdt:0, dthetadt:p.omega};
+  } else {
+    const E=solveKepler(M,e);
+    const cosE=Math.cos(E), sinE=Math.sin(E);
+    const r=p.distance*(1-e*cosE);
+    const theta=2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2),Math.sqrt(1-e)*Math.cos(E/2));
+    const dEdt=p.omega/(1-e*cosE);
+    const drdt=p.distance*e*sinE*dEdt;
+    const dthetadt=Math.sqrt(1-e*e)*p.omega/((1-e*cosE)*(1-e*cosE));
+    result={r,theta,drdt,dthetadt};
   }
-  const E=solveKepler(M,e);
-  const cosE=Math.cos(E), sinE=Math.sin(E);
-  const r=p.distance*(1-e*cosE);
-  const theta=2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2),Math.sqrt(1-e)*Math.cos(E/2));
-  const dEdt=p.omega/(1-e*cosE);
-  const drdt=p.distance*e*sinE*dEdt;
-  const dthetadt=Math.sqrt(1-e*e)*p.omega/((1-e*cosE)*(1-e*cosE));
-  return {r,theta,drdt,dthetadt};
+  p._oscT=t; p._oscVal=result;
+  return result;
 }
 
 //Basically if theres a binary star (Like Alpha Centauri!!) later on, this will handle it so i dont have to deal with this math later. I'll also not have to worry about it crashing.
@@ -815,33 +840,47 @@ function binaryPairVelocity(p,partner,t){
 
 function planetPositionAt(p,simTime){
   if(p.parent===null) return p.pos||SUN_POS; //Sun doesnt orbit anything and it doesnt have a parent as stated earlier //Edit stuff can carry a fixed `pos` (e.g. the far-away Alpha Centauri anchor) instead of being around the Sun's origin
+  if(p._posCacheT===simTime) return p._posCacheVal;
   const parent=BODIES_BY_KEY[p.parent];
-  if(parent.parent===p.key) return binaryPairPosition(p,parent,simTime);
-  const parentPos=planetPositionAt(parent,simTime);
-  const o=planetOrbitState(p,simTime);
-  return {x:parentPos.x+o.r*Math.cos(o.theta), y:parentPos.y+o.r*Math.sin(o.theta)};
+  let result;
+  if(parent.parent===p.key) result=binaryPairPosition(p,parent,simTime);
+  else{
+    const parentPos=planetPositionAt(parent,simTime);
+    const o=planetOrbitState(p,simTime);
+    result={x:parentPos.x+o.r*Math.cos(o.theta), y:parentPos.y+o.r*Math.sin(o.theta)};
+  }
+  p._posCacheT=simTime; p._posCacheVal=result;
+  return result;
 }
 function planetVelocityAt(p,t){
   if(p.parent===null) return {x:0,y:0};
+  if(p._velCacheT===t) return p._velCacheVal;
   const parent=BODIES_BY_KEY[p.parent];
-  if(parent.parent===p.key) return binaryPairVelocity(p,parent,t);
-  const o=planetOrbitState(p,t);
-  const cosT=Math.cos(o.theta), sinT=Math.sin(o.theta);
-  const localV={x:o.drdt*cosT-o.r*o.dthetadt*sinT, y:o.drdt*sinT+o.r*o.dthetadt*cosT};
-  const parentV=planetVelocityAt(parent,t);
-  return {x:parentV.x+localV.x, y:parentV.y+localV.y};
+  let result;
+  if(parent.parent===p.key) result=binaryPairVelocity(p,parent,t);
+  else{
+    const o=planetOrbitState(p,t);
+    const cosT=Math.cos(o.theta), sinT=Math.sin(o.theta);
+    const localV={x:o.drdt*cosT-o.r*o.dthetadt*sinT, y:o.drdt*sinT+o.r*o.dthetadt*cosT};
+    const parentV=planetVelocityAt(parent,t);
+    result={x:parentV.x+localV.x, y:parentV.y+localV.y};
+  }
+  p._velCacheT=t; p._velCacheVal=result;
+  return result;
 }
 
 //The smallest soi you are in is the one that effects you and all others get dropped or should get dropped - edit yes this works as intended
+const _domBodyStack=[];
 function findDominantBody(pos,t){
-  const dSun=Math.hypot(pos.x-SUN_POS.x,pos.y-SUN_POS.y);
-  if(dSun>SUN_BODY.soi){
-    const dAC=Math.hypot(pos.x-ALPHA_CEN_ANCHOR_POS.x,pos.y-ALPHA_CEN_ANCHOR_POS.y);
-    const dTC=Math.hypot(pos.x-TAU_CETI_POS.x,pos.y-TAU_CETI_POS.y);
-    if(dAC>ALPHA_CEN_MAX_EXTENT && dTC>TAU_CETI_MAX_EXTENT) return null; //weird bugfix for tau ceti appear as deep space idk why but works.
+  const dxSun=pos.x-SUN_POS.x, dySun=pos.y-SUN_POS.y;
+  if(dxSun*dxSun+dySun*dySun>SUN_BODY.soi*SUN_BODY.soi){
+    const dxAC=pos.x-ALPHA_CEN_ANCHOR_POS.x, dyAC=pos.y-ALPHA_CEN_ANCHOR_POS.y;
+    const dxTC=pos.x-TAU_CETI_POS.x, dyTC=pos.y-TAU_CETI_POS.y;
+    if(dxAC*dxAC+dyAC*dyAC>ALPHA_CEN_MAX_EXTENT*ALPHA_CEN_MAX_EXTENT && dxTC*dxTC+dyTC*dyTC>TAU_CETI_MAX_EXTENT*TAU_CETI_MAX_EXTENT) return null; //weird bugfix for tau ceti appear as deep space idk why but works.
   }
   let best=null;
-  const stack=STAR_BODIES.slice(); 
+  const stack=_domBodyStack; stack.length=0;
+  for(let i=0;i<STAR_BODIES.length;i++) stack.push(STAR_BODIES[i]);
   while(stack.length){
     const p=stack.pop();
     const ppos=planetPositionAt(p,t);
@@ -865,9 +904,9 @@ const PARTS = {
   tankS: {id:'tankS',name:'Fuel Tank — Small', w:2,h:4,dryMass:400, fuel:1800, thrust:0,      fuelRate:0,  color:'#c7cdd6',type:'tank',cat:'Fuel'},
   tankM: {id:'tankM',name:'Fuel Tank — Medium',w:4,h:6,dryMass:700, fuel:4200, thrust:0,      fuelRate:0,  color:'#aab2bd',type:'tank',cat:'Fuel'},
   tankL: {id:'tankL',name:'Fuel Tank — Large', w:4,h:8,dryMass:1100,fuel:8000, thrust:0,      fuelRate:0,  color:'#8d96a3',type:'tank',cat:'Fuel'},
-  engB:  {id:'engB', name:'Basic Engine',      w:2,h:3,dryMass:500, fuel:0,    thrust:900000, fuelRate:37.5, color:'#ff8a4c',type:'engine',cat:'Engines'},
+  engB:  {id:'engB', name:'Basic Engine',      w:2,h:3,dryMass:500, fuel:0,    thrust:900000, fuelRate:25, color:'#ff8a4c',type:'engine',cat:'Engines'},
   engA:  {id:'engA', name:'Advanced Engine',   w:4,h:3,dryMass:650, fuel:0,    thrust:1900000, fuelRate:45,   color:'#ff5c4c',type:'engine',cat:'Engines'},
-  engQB: {id:'engQB',name:'Quickburn Basic Engine',   w:2,h:3,dryMass:450, fuel:0, thrust:2720000,  fuelRate:200,  color:'#1a1a1a',type:'engine',cat:'Engines'},
+  engQB: {id:'engQB',name:'Quickburn Basic Engine',   w:2,h:3,dryMass:450, fuel:0, thrust:2720000,  fuelRate:150,  color:'#1a1a1a',type:'engine',cat:'Engines'},
   engQA: {id:'engQA',name:'Quickburn Advanced Engine',w:4,h:3,dryMass:700, fuel:0, thrust:19200000, fuelRate:1500, color:'#0e0e0e',type:'engine',cat:'Engines'},
   ionEngine:{id:'ionEngine',name:'Ion Engine', w:1,h:1,dryMass:40,  fuel:0,    thrust:3000,    fuelRate:0.25, color:'#8fe6ff',type:'engine',cat:'Engines',ionOnly:true},
   chute: {id:'chute',name:'Parachute',         w:2,h:2,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#f2f2f2',type:'chute',cat:'Aero'},
@@ -881,9 +920,9 @@ const PARTS = {
   coneS: {id:'coneS',name:'Nose Cone — Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',cat:'Aero',dragMult:0.7},
   coneM: {id:'coneM',name:'Nose Cone — Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',cat:'Aero',dragMult:0.55},
   coneL: {id:'coneL',name:'Nose Cone — Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',cat:'Aero',dragMult:0.4},
-  fairS: {id:'fairS',name:'Fairing — Small',   w:2,h:3,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#d0d6de',type:'fairing',cat:'Aero',dragMult:0.5},
-  fairM: {id:'fairM',name:'Fairing — Medium',  w:4,h:4,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4cad2',type:'fairing',cat:'Aero',dragMult:0.45},
-  fairL: {id:'fairL',name:'Fairing — Large',   w:4,h:6,dryMass:200, fuel:0,    thrust:0,      fuelRate:0,  color:'#b8bec6',type:'fairing',cat:'Aero',dragMult:0.4},
+  fairS: {id:'fairS',name:'Fairing — Small',   w:2,h:4,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#d0d6de',type:'fairing',cat:'Aero',dragMult:0.5},
+  fairM: {id:'fairM',name:'Fairing — Medium',  w:4,h:6,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4cad2',type:'fairing',cat:'Aero',dragMult:0.45},
+  fairL: {id:'fairL',name:'Fairing — Large',   w:4,h:8,dryMass:200, fuel:0,    thrust:0,      fuelRate:0,  color:'#b8bec6',type:'fairing',cat:'Aero',dragMult:0.4},
   fairTip:{id:'fairTip',name:'Fairing Cone Tip', w:2,h:2,dryMass:40,fuel:0,    thrust:0,      fuelRate:0,  color:'#e0e4ea',type:'fairing',cat:'Aero',dragMult:0.35,fairingTip:true},
 };
 const PART_LIST = Object.values(PARTS);
@@ -1383,7 +1422,7 @@ function drawPartShape(ctx,d,x,y,w,h){
       ctx.beginPath(); ctx.moveTo(x+w/2,y+h*0.1); ctx.lineTo(x+w*0.75,y+h*0.9); ctx.stroke();
     } else {
       ctx.beginPath(); ctx.moveTo(x+w*0.5,y); ctx.lineTo(x+w*0.5,y+h); ctx.stroke();
-      ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(x+w*0.1,y+h*0.1,w*0.8,h*0.15);
+      ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(x+w*0.1,y+w*0.08,w*0.8,Math.min(h*0.15,w*0.28));
     }
   }
 
@@ -1636,7 +1675,6 @@ function canPlace(partDefId,col,row,rot){
   const eff=effDims(partDefId,rot);
   if(col<0||row<0||col+eff.w>COLS||row+eff.h>ROWS) return false;
   if(d.type==='dock'){
-    // must sit against hull on the mounted side; open side stays clear to dock with
     const openDir=rot, mountDir=(rot+180)%360;
     const mounted=dirHullAdjacent(placedParts,col,row,eff.w,eff.h,mountDir);
     const openBlocked=dirHullAdjacent(placedParts,col,row,eff.w,eff.h,openDir);
@@ -1645,7 +1683,10 @@ function canPlace(partDefId,col,row,rot){
   if(cheats.buildNoclip) return true;
   const fp=partFootprint(partDefId,col,row,rot);
   for(const pp of placedParts){
-    if(rectsOverlap(fp,placedFootprint(pp))) return false;
+    const ppd=PARTS[pp.id], ppfp=placedFootprint(pp);
+    if(d.type==='fairing'&&!d.fairingTip&&ppd.type==='tank'&&fp.col===ppfp.col&&fp.w===ppfp.w) continue;
+    if(ppd.type==='fairing'&&!ppd.fairingTip&&d.type==='tank'&&fp.col===ppfp.col&&fp.w===ppfp.w) continue;
+    if(rectsOverlap(fp,ppfp)) return false;
   }
   return true;
 }
@@ -2312,9 +2353,23 @@ el('launchBtn').onclick=launch;
 
 el('menuPlayBtn').onclick=()=>{
   el('menuScreen').classList.remove('active');
-  el('buildScreen').classList.add('active');
-  resetBuildMusicCycle();
-  drawGrid();
+  // go to saved game instead of build
+  if(pendingRestoredFlight){
+    pendingRestoredFlight=false;
+    el('flightScreen').classList.add('active');
+    el('toBuildBtn').style.display='inline-block';
+    mode='flight';
+  } else {
+    el('buildScreen').classList.add('active');
+    resetBuildMusicCycle();
+    drawGrid();
+  }
+};
+// menu bottoooon
+el('menuBtn').onclick=()=>{
+  el('buildScreen').classList.remove('active');
+  el('flightScreen').classList.remove('active');
+  el('menuScreen').classList.add('active');
 };
 
 el('toBuildBtn').onclick=()=>{
@@ -2486,9 +2541,13 @@ function largestAllowedLevel(maxAllowed){
   WARP_LEVELS.forEach(w=>{ if(w<=maxAllowed) best=w; });
   return best;
 }
+let _warpBtnEls=null, _lastMaxAllowed=undefined, _lastMinAllowed=undefined;
 function updateWarpButtonsUI(maxAllowed, minAllowed){
   minAllowed=minAllowed===undefined?0:minAllowed; //defaults to 0
-  document.querySelectorAll('.warp-btn').forEach(b=>{
+  if(maxAllowed===_lastMaxAllowed&&minAllowed===_lastMinAllowed) return;
+  _lastMaxAllowed=maxAllowed; _lastMinAllowed=minAllowed;
+  if(!_warpBtnEls) _warpBtnEls=Array.from(document.querySelectorAll('.warp-btn'));
+  _warpBtnEls.forEach(b=>{
     const w=parseFloat(b.dataset.w);
     const disabled=w>maxAllowed||w<minAllowed;
     b.disabled=disabled;
@@ -2521,7 +2580,7 @@ function updateZoomButtons(){
       return;
     }
     const z=parseFloat(b.dataset.z);
-    const blocked=inAtmo&&!camFree&&z>ATMO_ZOOM_MAX_MPP;
+    const blocked=inAtmo&&!camFree&&z>atmoZoomMaxMpp(sh&&sh._domBody);
     b.disabled=blocked;
     b.title=blocked?'Not available inside atmosphere':'';
   });
@@ -2880,7 +2939,7 @@ flightCanvas.addEventListener('wheel',e=>{
   if(!sh) return;
   e.preventDefault();
   const factor=e.deltaY>0?1.15:0.8695652173913043;
-  const maxMpp=(sh._inAtmo&&!camFree)?ATMO_ZOOM_MAX_MPP:44000000000;
+  const maxMpp=(sh._inAtmo&&!camFree)?atmoZoomMaxMpp(sh._domBody):44000000000;
   camera.metersPerPixel=Math.max(0.02,Math.min(maxMpp,camera.metersPerPixel*factor));
 },{passive:false});
 
@@ -2888,7 +2947,7 @@ document.querySelectorAll('.zbtn').forEach(b=>{
   if(b.id==='camFreeBtn') return;
   b.onclick=()=>{
     const sh=activeShip();
-    if(sh&&sh._inAtmo&&!camFree&&parseFloat(b.dataset.z)>ATMO_ZOOM_MAX_MPP) return;
+    if(sh&&sh._inAtmo&&!camFree&&parseFloat(b.dataset.z)>atmoZoomMaxMpp(sh._domBody)) return;
     camera.metersPerPixel=parseFloat(b.dataset.z);
   };
 });
@@ -3169,7 +3228,12 @@ function shipDragMult(f){
     const d=PARTS[pp.id];
     if(d.type!=='cone'&&d.type!=='fairing') return;
     if(d.type==='fairing'&&d.fairingTip) return;
-    const onTank=f.parts.some(o=>PARTS[o.id].type==='tank'&&footprintsTouch(pp,o));
+    const onTank=f.parts.some(o=>{
+      if(PARTS[o.id].type!=='tank') return false;
+      if(footprintsTouch(pp,o)) return true;
+      const afp=placedFootprint(pp), bfp=placedFootprint(o);
+      return afp.col===bfp.col&&afp.w===bfp.w&&afp.row<bfp.row+bfp.h&&afp.row+afp.h>bfp.row;
+    });
     if(onTank) m*=d.dragMult;
   });
   return m;
@@ -3703,17 +3767,27 @@ function trailPointWorldPos(p){
 // RENDER
 // ============================================================
 //arrow to point to stars
+let _frameCW=0,_frameCH=0; 
 const EDGE_ARROW_MARGIN = 30;
 const EDGE_ARROW_SIZE = 12;
+let _edgeArrowCW=0,_edgeArrowCH=0;
 function shouldShowEdgeArrows(){
-  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
-  const halfDiag=Math.hypot(CW,CH)/2;
+  _edgeArrowCW=flightCanvas.clientWidth; _edgeArrowCH=flightCanvas.clientHeight;
+  const halfDiag=Math.hypot(_edgeArrowCW,_edgeArrowCH)/2;
   return camera.metersPerPixel*halfDiag>SUN_BODY.soi; //render this only if bigger than sun soi zoom
 }
-function drawEdgeArrowTo(body,t){
-  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
-  const pos=planetPositionAt(body,t);
-  const s=worldToScreen(pos.x,pos.y);
+function edgeArrowGroupTarget(bodies,t,label){
+  let best=bodies[0],bestD=Infinity,bestPos=null;
+  bodies.forEach(b=>{
+    const pos=planetPositionAt(b,t);
+    const d=Math.hypot(pos.x-camera.x,pos.y-camera.y);
+    if(d<bestD){bestD=d;best=b;bestPos=pos;}
+  });
+  return {pos:bestPos,color:best.color,name:label,dist:bestD};
+}
+function drawEdgeArrowTo(target){
+  const CW=_edgeArrowCW, CH=_edgeArrowCH;
+  const s=worldToScreen(target.pos.x,target.pos.y);
   const cx=CW/2, cy=CH/2;
   if(s.x>=EDGE_ARROW_MARGIN&&s.x<=CW-EDGE_ARROW_MARGIN&&s.y>=EDGE_ARROW_MARGIN&&s.y<=CH-EDGE_ARROW_MARGIN) return;
   let dx=s.x-cx, dy=s.y-cy;
@@ -3722,7 +3796,6 @@ function drawEdgeArrowTo(body,t){
   const scale=Math.min(dx!==0?halfW/Math.abs(dx):Infinity, dy!==0?halfH/Math.abs(dy):Infinity);
   const ax=cx+dx*scale, ay=cy+dy*scale;
   const angle=Math.atan2(dy,dx);
-  const dist=Math.hypot(pos.x-camera.x,pos.y-camera.y);
 
   fctx.save();
   fctx.translate(ax,ay);
@@ -3732,7 +3805,7 @@ function drawEdgeArrowTo(body,t){
   fctx.lineTo(-EDGE_ARROW_SIZE*0.65,EDGE_ARROW_SIZE*0.62);
   fctx.lineTo(-EDGE_ARROW_SIZE*0.65,-EDGE_ARROW_SIZE*0.62);
   fctx.closePath();
-  fctx.fillStyle=body.color; fctx.fill();
+  fctx.fillStyle=target.color; fctx.fill();
   fctx.lineWidth=1.5; fctx.strokeStyle='rgba(0,0,0,0.55)'; fctx.stroke();
   fctx.restore();
 
@@ -3741,14 +3814,24 @@ function drawEdgeArrowTo(body,t){
   fctx.save();
   fctx.font='11px sans-serif';
   fctx.textAlign='center'; fctx.textBaseline='middle';
-  const label=body.name+' — '+fmtDist(dist);
+  const label=target.name+' — '+fmtDist(target.dist);
   fctx.lineWidth=3; fctx.strokeStyle='rgba(0,0,0,0.75)'; fctx.strokeText(label,lx,ly);
-  fctx.fillStyle=body.color; fctx.fillText(label,lx,ly);
+  fctx.fillStyle=target.color; fctx.fillText(label,lx,ly);
   fctx.restore();
 }
+// Concenctrated all alpha cent stars arrow into one arrow group bc that was annoying
+const ALPHA_CEN_GROUP=[ALPHA_CEN_A,ALPHA_CEN_B,PROXIMA];
 function drawEdgeArrows(t){
   if(!shouldShowEdgeArrows()) return;
-  STAR_BODIES.forEach(st=>drawEdgeArrowTo(st,t));
+  STAR_BODIES.forEach(st=>{
+    if(ALPHA_CEN_GROUP.includes(st)){
+      if(st!==ALPHA_CEN_A) return;
+      drawEdgeArrowTo(edgeArrowGroupTarget(ALPHA_CEN_GROUP,t,'Alpha Centauri'));
+      return;
+    }
+    const pos=planetPositionAt(st,t);
+    drawEdgeArrowTo({pos,color:st.color,name:st.name,dist:Math.hypot(pos.x-camera.x,pos.y-camera.y)});
+  });
 }
 
 //I regeneralized this from draw sun. now we can have multiple stars
@@ -3756,7 +3839,7 @@ function drawStar(body,t){
   const pos=planetPositionAt(body,t);
   const s=worldToScreen(pos.x,pos.y);
   const r=Math.max(1.2,body.radius/camera.metersPerPixel);
-  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  const CW=_frameCW, CH=_frameCH;
   if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
   const grad=fctx.createRadialGradient(s.x-r*0.3,s.y-r*0.3,r*0.05,s.x,s.y,r);
   grad.addColorStop(0,shadeColor(body.color,0.3));
@@ -3778,7 +3861,7 @@ function drawOrbitPath(p,t){
   const s=worldToScreen(cx,cy);
   const rx=a/camera.metersPerPixel, ry=b/camera.metersPerPixel;
   // Screen-size based cutoff instead of a fixed metersPerPixel threshold, so tiny moon orbit rails still draw when zoomed in close. this was an annoying bug
-  const maxDim=Math.max(flightCanvas.clientWidth,flightCanvas.clientHeight);
+  const maxDim=Math.max(_frameCW,_frameCH); 
   if(rx<ORBIT_MIN_PX&&ry<ORBIT_MIN_PX) return; //if too small it isnt worth drawing
   if(rx>maxDim*ORBIT_MAX_PX_MULT) return; //too big just a straight line across teh screen thats also not worth it
   fctx.beginPath(); fctx.ellipse(s.x,s.y,rx,ry,camera.angle,0,Math.PI*2);
@@ -3789,7 +3872,7 @@ function drawSOICircle(p,t){
   const pos=planetPositionAt(p,t);
   const s=worldToScreen(pos.x,pos.y);
   const r=p.soi/camera.metersPerPixel;
-  if(r<3||r>Math.max(flightCanvas.clientWidth,flightCanvas.clientHeight)*6) return;
+  if(r<3||r>Math.max(_frameCW,_frameCH)*6) return;
   fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
   fctx.setLineDash([8,6]);
   fctx.strokeStyle=hexToRgba(p.color,0.35); fctx.lineWidth=1; fctx.stroke();
@@ -3806,7 +3889,7 @@ function drawPlanet(p,t,viewerPos){
   const pos=planetPositionAt(p,t);
   const s=worldToScreen(pos.x,pos.y);
   const r=Math.max(1.2,p.radius/camera.metersPerPixel);
-  const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
+  const CW=_frameCW, CH=_frameCH;
   if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
 
   if(p.atmo){
@@ -3875,7 +3958,7 @@ function drawLaunchPad(){
 
   // Cull if off-screen or too tiny
   const ps=worldToScreen(cx,cy);
-  const CW=flightCanvas.clientWidth,CH=flightCanvas.clientHeight;
+  const CW=_frameCW,CH=_frameCH;
   const rPix=Math.max(PAD_B,PAD_H+PAD_EMBED)/camera.metersPerPixel;
   if(rPix<0.4) return;
   if(ps.x<-rPix*4||ps.x>CW+rPix*4||ps.y<-rPix*4||ps.y>CH+rPix*4) return;
@@ -4198,6 +4281,7 @@ function cullOverlappingBodies(){
 
 function render(){
   const {w:CW,h:CH}=fitCanvasToDisplay(flightCanvas,fctx);
+  _frameCW=CW; _frameCH=CH;
 
   // --- Atmosphere background ---
   let starFade=1; // 1=full stars, 0=no stars
@@ -4518,7 +4602,7 @@ function updateMusicState(){
       musicNode.port.postMessage({type:'state',value:st});
     }else if(musicFallbackState){
       const tg=musicFallbackState.targetGains;
-      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.interstellar=0; tg.nightVision=0;
+      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0;
       tg[st]=1;
     }
   }
@@ -4565,7 +4649,8 @@ function startMusicEngineFallback(){
     };
     musicFallbackState=st;
     const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr;
-    musicScriptNode=musicCtx.createScriptProcessor(4096,0,2);
+    // No more music glitching on lag hopefully. I made buffer bigger. Means more lag overall but no glitchies when it does - modders, if you'd rather buggy music on lag in return for performance edit this
+    musicScriptNode=musicCtx.createScriptProcessor(16384,0,2);
     musicScriptNode.onaudioprocess=(e)=>{
       const L=e.outputBuffer.getChannelData(0), R=e.outputBuffer.getChannelData(1);
       const volStep=1/(0.05*sr); 
@@ -4748,13 +4833,13 @@ function loop(now){
     const wasInAtmo=sh._prevInAtmo||false;
     if(!wasInAtmo&&sh._inAtmo){
       // Just crossed into atmosphere — snap camera to close view
-      camera.metersPerPixel=Math.min(camera.metersPerPixel,ATMO_ZOOM_ENTER_MPP);
+      camera.metersPerPixel=Math.min(camera.metersPerPixel,atmoZoomEnterMpp(sh._domBody));
     }
   }
   ships.forEach(s=>{ s._prevInAtmo=s._inAtmo; });
   // Hard-clamp zoom while any flying active ship is in atmosphere — skipped in free camera
   if(sh&&sh._inAtmo&&sh.status==='flying'&&!camFree){
-    camera.metersPerPixel=Math.min(camera.metersPerPixel,ATMO_ZOOM_MAX_MPP);
+    camera.metersPerPixel=Math.min(camera.metersPerPixel,atmoZoomMaxMpp(sh._domBody));
   }
   updateZoomButtons();
 
@@ -4806,21 +4891,19 @@ function loop(now){
 window.addEventListener('resize',()=>{ drawGrid(); positionShipList(); });
 
 // ---------- Restore flying ships from previous session ----------
+let pendingRestoredFlight=false;
 if(loadShips()&&ships.length){
   activeShipIdx=0;
   const first=activeShip();
   camera.x=first.pos.x; camera.y=first.pos.y;
   camera.metersPerPixel=3000000; // orbit view for restored sessions
   camera.angle=0;
-  el('menuScreen').classList.remove('active'); 
-  el('buildScreen').classList.remove('active');
-  el('flightScreen').classList.add('active');
-  el('toBuildBtn').style.display='inline-block';
   mode='flight';
   el('throttleSlider').value=Math.round(first.throttle*100);
   hud.throttle.textContent=Math.round(first.throttle*100)+'%';
   setWarp(1); updateEngineBtn(); updateChuteBtn(); renderShipList(); renderStagingList(); renderFuelList();
-  showToast('Restored '+ships.length+' ship(s) from your last session.');
+  pendingRestoredFlight=true;
+  el('menuPlayBtn').textContent='Continue';
 }
 
 requestAnimationFrame(loop);
