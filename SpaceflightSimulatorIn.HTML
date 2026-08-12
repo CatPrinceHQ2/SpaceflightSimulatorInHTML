@@ -495,23 +495,14 @@ const SAFE_LANDING_SPEED = 300;
 const MAX_SUBSTEPS_PER_FRAME = 2500;
 // Real seconds in a year, used only to derive GM_SUN — planets don't actually take this long to orbit
 const ORBIT_YEAR_SECONDS = 31557600;
-// scales sun s gravity up from
-const GM_SUN_MULT = 150;
-const GM_SUN = 4 * Math.PI * Math.PI * AU * AU * AU / (ORBIT_YEAR_SECONDS * ORBIT_YEAR_SECONDS) * GM_SUN_MULT;
-// artificial factor planet orbital periods run
-const ORBIT_PERIOD_CALIBRATION_MULT = 10;
-// multiplies planet gravity wells escaping them
-const PLANET_GM_MULT = 10;
-// Extra scale on top of the Hill-sphere formula, for SOI size independent of gravity above
-const SOI_SCALE = 0.4;
+// GM_SUN = 4*pi^2*AU^3/year^2 * 150 (150x scales the sun's gravity up for gameplay pacing), evaluated
+const GM_SUN = 19908468035775750;
 // gameplay drag exponential velocity decay from
 const ATMO_DRAG_K = 0.0005;
 const PARACHUTE_DRAG_MULT = 40;
 const GAS_GIANT_CRUSH_DEPTH = 0.4;
 const WARP_LEVELS = [0,0.1,0.5,1,2,3,5,25,100,1000,10000,100000,1000000,1000000000]; //new warp levels bc landing on tiny little moons is hard at 1x
 const MAX_CONTROL_WARP = 3;
-// Extra moon-only SOI scale — Hill-sphere formula makes moon SOIs too tight to fly in otherwise
-const MOON_SOI_MULT = 2.5; //Moon sois were small so i just put this in to make it good
 // orbit ellipses drawn their screen size
 const ORBIT_MIN_PX = 4; //smallest screen before orbit lines are drawn on screen
 const ORBIT_MAX_PX_MULT = 50; //if it is too big it wont get drawn
@@ -588,14 +579,12 @@ function solveKepler(M,e){
 
 const TOP_LEVEL_PLANETS = PLANET_DEFS.map((p,i)=>{
   const distance = p.distAU*AU;
-  const GM = p.surfG*p.radius*p.radius*PLANET_GM_MULT;
-  // GMbase excludes PLANET_GM_MULT — keeps SOI size stable regardless of boosted gravity
-  const GMbase = p.surfG*p.radius*p.radius;
-  // Divide by sqrt(ORBIT_PERIOD_CALIBRATION_MULT) — artificial pacing, independent of GM_SUN_MULT
-  const periodSimSeconds = (p.periodDays/365.25)*ORBIT_YEAR_SECONDS/Math.sqrt(ORBIT_PERIOD_CALIBRATION_MULT);
+  const GM = p.surfG*p.radius*p.radius*10; // 10x boosts planet gravity wells so they're escapable at gameplay speeds
+  const GMbase = p.surfG*p.radius*p.radius; // excludes the 10x GM boost — keeps SOI size stable regardless of boosted gravity
+  const periodSimSeconds = (p.periodDays/365.25)*ORBIT_YEAR_SECONDS/Math.sqrt(10); // /sqrt(10) is artificial pacing, independent of the sun's 150x gravity boost
   const omega = 2*Math.PI/periodSimSeconds;
   const initialAngle = (i/PLANET_DEFS.length)*Math.PI*2;
-  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*GM_SUN))*SOI_SCALE);
+  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*GM_SUN))*0.4); // 0.4 is extra scale on top of the Hill-sphere formula, independent of gravity above
   const ecc = eccFromMod(p.eccMod);
   const body = Object.assign({},p,{distance,GM,GMbase,omega,initialAngle,soi,ecc});
   BODIES_BY_KEY[body.key]=body;
@@ -608,10 +597,10 @@ const MOONS = MOON_DEFS.map(m=>{
   const radius = m.radiusMod*parent.radius;
   const distance = m.distMod*parent.radius;
   const GMbase = m.surfG*radius*radius;
-  const GM = GMbase*PLANET_GM_MULT;
+  const GM = GMbase*10; // 10x boosts planet gravity wells so they're escapable at gameplay speeds
   const omega = Math.sqrt(parent.GM/(distance*distance*distance));
   const initialAngle = (moonAngleSeed++%7)/7*Math.PI*2;
-  const soi = Math.max(radius*3, distance*Math.cbrt(GMbase/(3*parent.GM))*SOI_SCALE)*MOON_SOI_MULT; //this computes moon soi multi from earlier which i set
+  const soi = Math.max(radius*3, distance*Math.cbrt(GMbase/(3*parent.GM))*0.4)*2.5; //0.4 Hill-sphere scale, *2.5 extra moon-only SOI boost since moon SOIs were too tight to fly in otherwise
   const ecc = eccFromMod(m.eccMod);
   const body = Object.assign({},m,{radius,distance,GM,GMbase,omega,initialAngle,soi,ecc});
   BODIES_BY_KEY[body.key]=body;
@@ -630,8 +619,8 @@ const ALL_BODIES = [...STAR_BODIES, ...PLANETS];
 
 // add alpha centauri anchor
 
-const ALPHA_CEN_SYSTEM_DIST_AU = 8750; 
-const ALPHA_CEN_SYSTEM_Y_AU = 2000; 
+const ALPHA_CEN_SYSTEM_DIST_AU = 1110; 
+const ALPHA_CEN_SYSTEM_Y_AU = 254; 
 const ALPHA_CEN_ANCHOR_POS = {x:ALPHA_CEN_SYSTEM_DIST_AU*AU, y:ALPHA_CEN_SYSTEM_Y_AU*AU};
 
 //Gravity vals
@@ -658,7 +647,7 @@ const ALPHA_CEN_A = {
   GM:GM_ALPHA_CEN_A, GMbase:GM_ALPHA_CEN_A,
   solid:false, atmo:false,
   distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
-  soi:600*AU,
+  soi:251674503417.04407, 
 };
 const ALPHA_CEN_B = {
   key:'alphaCenB', name:'Alpha Centauri B (Toliman)',
@@ -668,7 +657,7 @@ const ALPHA_CEN_B = {
   GM:GM_ALPHA_CEN_B, GMbase:GM_ALPHA_CEN_B,
   solid:false, atmo:false,
   distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
-  soi:440*AU,
+  soi:221300445550.4541, 
 };
 BODIES_BY_KEY['alphaCenA']=ALPHA_CEN_A;
 BODIES_BY_KEY['alphaCenB']=ALPHA_CEN_B;
@@ -680,7 +669,7 @@ const PROXIMA_DISTANCE = PROXIMA_DIST_AU*AU;
 const PROXIMA_ECC = 0.50; 
 const PROXIMA_OMEGA = Math.sqrt(GM_ALPHA_CEN_AB/Math.pow(PROXIMA_DISTANCE,3)); 
 const PROXIMA_RADIUS = SUN_RADIUS*0.3; 
-const PROXIMA_SOI = Math.max(PROXIMA_RADIUS*3, PROXIMA_DISTANCE*Math.cbrt(GM_PROXIMA/(3*GM_ALPHA_CEN_AB))*SOI_SCALE);
+const PROXIMA_SOI = Math.max(PROXIMA_RADIUS*3, PROXIMA_DISTANCE*Math.cbrt(GM_PROXIMA/(3*GM_ALPHA_CEN_AB))*0.1); 
 
 const PROXIMA = {
   key:'proxima', name:'Proxima Centauri (Alpha Centauri C)',
@@ -703,11 +692,11 @@ const PROXIMA_PLANET_DEFS = [
 ];
 const PROXIMA_PLANETS = PROXIMA_PLANET_DEFS.map((p,i)=>{
   const distance = p.distAU*AU;
-  const GM = p.surfG*p.radius*p.radius*PLANET_GM_MULT;
+  const GM = p.surfG*p.radius*p.radius*10; // 10x planet gravity boost
   const GMbase = p.surfG*p.radius*p.radius;
   const omega = Math.sqrt(PROXIMA.GM/Math.pow(distance,3)); // real life orbit rate so d is moving fast as shiiii
   const initialAngle = (i/PROXIMA_PLANET_DEFS.length)*Math.PI*2;
-  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*PROXIMA.GM))*SOI_SCALE)*4;
+  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*PROXIMA.GM))*0.4)*4; // 0.4 Hill-sphere scale, *4 extra SOI boost
   const ecc = eccFromMod(p.eccMod);
   const body = Object.assign({},p,{parent:'proxima',distance,GM,GMbase,omega,initialAngle,soi,ecc});
   BODIES_BY_KEY[body.key]=body;
@@ -716,6 +705,51 @@ const PROXIMA_PLANETS = PROXIMA_PLANET_DEFS.map((p,i)=>{
 PLANETS.push(...PROXIMA_PLANETS);
 ALL_BODIES.push(ALPHA_CEN_A, ALPHA_CEN_B, PROXIMA, ...PROXIMA_PLANETS);
 const ALPHA_CEN_MAX_EXTENT = (ALPHA_CEN_AB_DISTANCE+Math.max(ALPHA_CEN_A.soi,ALPHA_CEN_B.soi)+PROXIMA_DISTANCE+PROXIMA_SOI)*1.5;
+
+// add tau ceti anchor, placed 110 degrees around from alpha centauri's own direction off the sun
+const ALPHA_CEN_DIR_ANGLE = Math.atan2(ALPHA_CEN_SYSTEM_Y_AU, ALPHA_CEN_SYSTEM_DIST_AU);
+const TAU_CETI_DIR_ANGLE = ALPHA_CEN_DIR_ANGLE + 110*Math.PI/180;
+const ALPHA_CEN_REAL_LY = 4.37, TAU_CETI_REAL_LY = 11.9; 
+const ALPHA_CEN_GAME_DIST_AU = Math.hypot(ALPHA_CEN_SYSTEM_DIST_AU, ALPHA_CEN_SYSTEM_Y_AU);
+const TAU_CETI_DIST_AU = ALPHA_CEN_GAME_DIST_AU * (TAU_CETI_REAL_LY/ALPHA_CEN_REAL_LY);
+const TAU_CETI_POS = {x:TAU_CETI_DIST_AU*AU*Math.cos(TAU_CETI_DIR_ANGLE), y:TAU_CETI_DIST_AU*AU*Math.sin(TAU_CETI_DIR_ANGLE)};
+const GM_TAU_CETI = 0.783*GM_SUN;
+
+// ez star
+const TAU_CETI = {
+  key:'tauCeti', name:'Tau Ceti',
+  parent:null, pos:TAU_CETI_POS,
+  color:'#ffd27f', groundColor:null,
+  radius:SUN_RADIUS*0.79,
+  GM:GM_TAU_CETI, GMbase:GM_TAU_CETI,
+  solid:false, atmo:false,
+};
+BODIES_BY_KEY['tauCeti']=TAU_CETI;
+STAR_BODIES.push(TAU_CETI);
+
+const TAU_CETI_PLANET_DEFS = [
+  {key:'tauCetiG',name:'Tau Ceti g',parent:'tauCeti',color:'#3a2a1e',groundColor:'#2a1c13',radius:720000,surfG:13.2,distAU:0.52,solid:true,atmo:false,eccMod:0.94},
+  {key:'tauCetiH',name:'Tau Ceti h',parent:'tauCeti',color:'#b8552a',groundColor:'#9c4a24',radius:714000,surfG:13.1,distAU:0.96,solid:true,atmo:true, atmoFrac:0.2, atmoColor:'#c97b4a',eccMod:0.23},
+  {key:'tauCetiE',name:'Tau Ceti e',parent:'tauCeti',color:'#dbd9a3',groundColor:'#9da868',radius:1080000,surfG:19.8,distAU:2.2,solid:true,atmo:true, atmoFrac:0.52,atmoColor:'#e6e2b8',eccMod:0.82},
+  {key:'tauCetiF',name:'Tau Ceti f',parent:'tauCeti',color:'#2d5fae',groundColor:'#cfe3ea',radius:1086000,surfG:19.9,distAU:5.32,solid:true,atmo:true, atmoFrac:0.36,atmoColor:'#7fa8c9',eccMod:0.84},
+];
+TAU_CETI.soi = 7*TAU_CETI_PLANET_DEFS[TAU_CETI_PLANET_DEFS.length-1].distAU*AU; 
+const TAU_CETI_PLANETS = TAU_CETI_PLANET_DEFS.map((p,i)=>{
+  const distance = p.distAU*AU;
+  const GM = p.surfG*p.radius*p.radius*10; 
+  const GMbase = p.surfG*p.radius*p.radius;
+  const omega = Math.sqrt(TAU_CETI.GM/Math.pow(distance,3));
+  const initialAngle = (i/TAU_CETI_PLANET_DEFS.length)*Math.PI*2;
+  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*TAU_CETI.GM))*0.4)*4; 
+  const ecc = eccFromMod(p.eccMod);
+  const body = Object.assign({},p,{distance,GM,GMbase,omega,initialAngle,soi,ecc});
+  BODIES_BY_KEY[body.key]=body;
+  return body;
+});
+PLANETS.push(...TAU_CETI_PLANETS);
+ALL_BODIES.push(TAU_CETI, ...TAU_CETI_PLANETS);
+const TAU_CETI_MAX_EXTENT = (TAU_CETI.soi+TAU_CETI_PLANETS[TAU_CETI_PLANETS.length-1].distance+TAU_CETI_PLANETS[TAU_CETI_PLANETS.length-1].soi)*1.5;
+
 const BODY_CHILDREN = {};
 PLANETS.forEach(p=>{
   if(!BODY_CHILDREN[p.parent]) BODY_CHILDREN[p.parent]=[];
@@ -803,7 +837,8 @@ function findDominantBody(pos,t){
   const dSun=Math.hypot(pos.x-SUN_POS.x,pos.y-SUN_POS.y);
   if(dSun>SUN_BODY.soi){
     const dAC=Math.hypot(pos.x-ALPHA_CEN_ANCHOR_POS.x,pos.y-ALPHA_CEN_ANCHOR_POS.y);
-    if(dAC>ALPHA_CEN_MAX_EXTENT) return null;
+    const dTC=Math.hypot(pos.x-TAU_CETI_POS.x,pos.y-TAU_CETI_POS.y);
+    if(dAC>ALPHA_CEN_MAX_EXTENT && dTC>TAU_CETI_MAX_EXTENT) return null; //weird bugfix for tau ceti appear as deep space idk why but works.
   }
   let best=null;
   const stack=STAR_BODIES.slice(); 
@@ -853,7 +888,7 @@ const PARTS = {
 };
 const PART_LIST = Object.values(PARTS);
 const PART_CATS = ['Command','Fuel','Engines','Staging','Aero','Utility'];
-const ION_STORAGE_CAPACITY=100; // percentage
+const ION_STORAGE_CAPACITY=100;
 let paletteCat = 'All';
 
 // ============================================================
@@ -4340,6 +4375,44 @@ function interstellarTrack(t){
   const R=arp1(1,-8)*pan(1,r)+arp2(1,-8)*pan(1,.8,.8)+bass(1,-10)+lead(1)*pan(0,.8);
   return [byteToSample(L),byteToSample(R)];
 }
+// 36kHz mono bytebeat — "Wander Through The Sky" — played while inside the Tau Ceti system's SOI.
+function tauCetiTrack(t){
+  const sin=Math.sin, PI=Math.PI, min=Math.min;
+  let n,o;
+  const s=6.4, T=t*s/48E3, b=T/8%112;
+  const U=['C78A','5013'];
+  const V='55 77 33 00 0 0 11 11 11 33 3 3 ';
+  const W=[['5 0 3 0 5 0 3 0 5 0 3 0 5 0 3 0 '],['5 0 3 0 5 3 7 3 8 3 7 3 8 887 53','5 0 3 0 5 3 7 3 8 AA7 3 87887753'],['55553333555577778888AAAA88887777','55553333555577778888777733330000'],['50553033535570778388A3AA83887377','50553033505570778388707730330000'],['FFFFHHCCCCCCAAAADDDDFFDDDDCCCCCC','HHHHHHCCCCCCJJJJKKKKJJFFFFFFFFCC']];
+  const X=[['6 6 6 6 2 6 6 6 6 266 6 266EEEEE'],['3 7 7 7 3 7 3 7 7 37F 7 17FFFFFF'],['P VVV VVV VPV VSS VVV V3V VVV PS'],['VV1VV1VBVV1RR1VVBV1VV1VERVEV1RRB'],['16EECC1EE4EE9ECC16EE2616E41E9E9E']];
+  const G=c=>2112E4*T/s*2**((parseInt(c,36)+1)/12);
+  const R=x=>(x^-(x>>8&1))&240;
+  const C=(a,Tt)=>a[Tt>>5&a.length-1][Tt&31];
+  const F=(N,f,d)=>{
+    f=parseInt(C(f,T-d),36);
+    n=C(N,T-d);
+    if(isNaN(f)||n===' ')return 0;
+    o=G(n)*(8*T&7||f/4&1?1:2**(-1/12))>>8;
+    switch(f>>3&3){
+      case 1:o+=64*sin(2*PI*T);break;
+      case 2:2*T&1||(o=0);break;
+      case 3:2*T&1&&(o=0)
+    }
+    switch(f&3){
+      case 0:d=224;break;
+      case 1:d=192;break;
+      case 2:d=128;break;
+      case 3:d=(8*T&3)<2?64:128
+    }
+    return 128*((o&255)>d);
+  };
+  const L=(a,f)=>F(a,f,0)+F(a,f,1.5)/3+F(a,f,3)/4+F(a,f,4.5)/5;
+  const B=i=>G(U[i][T/8&3])>>10&128;
+  const D=p=>(1E5*sin(p*T|0)&64)*(1-T%2/3);
+  const M=(p,ss)=>p>>(T>>ss)&1;
+  const e=(a,c,e2,f)=>b<a?0:b<a+c?(b-a)/c:b<e2?1:b<e2+f?1-(b-e2)/f:0;
+  const v=min(255,(b<96?e(0,6,32,16):e(88,16,104,8))*L(W[+(b>7&&b<32)],X[+(b>16)])/3+(b<96&&e(38,10,88,16)*L(W[b>64?3:2],X[b>71?1:b>56?3:2])/3)+(b>32&&e(28,12,48,32)*L(W[4],X[4])/5)+e(0,8,104,8)*(B(0)+B(1))/10+((b<32||b>48)&&(b<71||b>80)&&(b>16&&b<103&&.4*R(G(V[T&31])>>9))+(b>8&&b<96&&D(1E6)*M(0xEAEAAAEA,1))/5)+(b>7&&b<104&&(b<71||b>72)&&32*(sin(180*(T%1)**.4)+1)*M(0x44490449,0)+.6*D(300)*M(0xC4444444,1)));
+  return byteToSample(v);
+}
 `;
 const FADE_SECONDS = 1.6;
 const BYTEBEAT_WORKLET_SRC = BYTEBEAT_TRACKS_SRC + `
@@ -4350,14 +4423,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
   }
   constructor(){
     super();
-    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0}; 
-    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0}; 
-    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; 
+    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0}; 
+    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0}; 
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
-        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0}; 
+        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0,tauCeti:0}; 
         this.targetGains[d.value]=1;
       }
     };
@@ -4367,14 +4440,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate;
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate;
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
         if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
         else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
       }
-      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; 
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; 
       let l=0,r=0;
       if(this.gains.atmo>0.0005){
         const s=atmoTrack(Math.floor(this.tfAtmo));
@@ -4396,6 +4469,10 @@ class BytebeatProcessor extends AudioWorkletProcessor {
         const s=nightVisionTrack(Math.floor(this.tfNightVision))*this.gains.nightVision;
         l+=s; r+=s;
       }
+      if(this.gains.tauCeti>0.0005){
+        const s=tauCetiTrack(Math.floor(this.tfTauCeti))*this.gains.tauCeti;
+        l+=s; r+=s;
+      }
       L[i]=Math.max(-1,Math.min(1,l*v));
       R[i]=Math.max(-1,Math.min(1,r*v));
     }
@@ -4408,7 +4485,7 @@ let musicCtx=null, musicNode=null, musicVolume=0.35, musicLastState=null, musicS
 // fix chromebook fallback
 let musicScriptNode=null, musicFallbackState=null, musicFallbackFns=null;
 // Build Grid has no flight state to key music off of, so it cycles through every track instead.
-const BUILD_MUSIC_ORDER=['atmo','soi','interplanetary','interstellar','nightVision'];
+const BUILD_MUSIC_ORDER=['atmo','soi','interplanetary','interstellar','nightVision','tauCeti'];
 const BUILD_MUSIC_CYCLE_MS=120000; // 2 minutes per track
 let buildMusicCycleAnchor=null;
 function resetBuildMusicCycle(){ buildMusicCycleAnchor=null; }
@@ -4422,14 +4499,15 @@ function currentMusicState(){
   if(el('buildScreen').classList.contains('active')) return buildMusicState();
   const sh=activeShip();
   if(sh&&sh.status==='flying'){
-    if(sh._domBody===ALPHA_CEN_A||sh._domBody===ALPHA_CEN_B) return 'nightVision';
+    if(sh._domBody===ALPHA_CEN_A||sh._domBody===ALPHA_CEN_B||sh._domBody===PROXIMA) return 'nightVision';
+    if(sh._domBody===TAU_CETI||TAU_CETI_PLANETS.includes(sh._domBody)) return sh._inAtmo?'atmo':'tauCeti';
     if(sh._domBody&&sh._domBody!==SUN_BODY) return sh._inAtmo?'atmo':'soi';
     if(sh._domBody===SUN_BODY) return 'interplanetary';
     return 'interstellar';
   }
   return 'interplanetary';
 }
-const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision'};
+const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky'};
 function updateMusicState(){
   if(!musicNode&&!musicFallbackState) return;
   const st=currentMusicState();
@@ -4474,19 +4552,19 @@ function startMusicEngineFallback(){
     musicCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(!musicFallbackFns){
       musicFallbackFns=new Function(BYTEBEAT_TRACKS_SRC+
-        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack};')();
+        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack};')();
     }
-    const {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack}=musicFallbackFns;
+    const {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack}=musicFallbackFns;
     const sr=musicCtx.sampleRate;
     const st={
-      gains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0},
-      targetGains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0},
-      tfAtmo:0,tfInter:0,tfSoi:0,tfInterstellar:0,tfNightVision:0,
+      gains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0},
+      targetGains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0},
+      tfAtmo:0,tfInter:0,tfSoi:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,
       fadeStep:1/(FADE_SECONDS*sr),
       vol:musicVolume,
     };
     musicFallbackState=st;
-    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr;
+    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr;
     musicScriptNode=musicCtx.createScriptProcessor(4096,0,2);
     musicScriptNode.onaudioprocess=(e)=>{
       const L=e.outputBuffer.getChannelData(0), R=e.outputBuffer.getChannelData(1);
@@ -4498,7 +4576,7 @@ function startMusicEngineFallback(){
           if(st.gains[k]<st.targetGains[k]) st.gains[k]=Math.min(st.targetGains[k],st.gains[k]+st.fadeStep);
           else if(st.gains[k]>st.targetGains[k]) st.gains[k]=Math.max(st.targetGains[k],st.gains[k]-st.fadeStep);
         }
-        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision;
+        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti;
         let l=0,r=0;
         if(st.gains.atmo>0.0005){
           const s=atmoTrack(Math.floor(st.tfAtmo));
@@ -4518,6 +4596,10 @@ function startMusicEngineFallback(){
         }
         if(st.gains.nightVision>0.0005){
           const s=nightVisionTrack(Math.floor(st.tfNightVision))*st.gains.nightVision;
+          l+=s; r+=s;
+        }
+        if(st.gains.tauCeti>0.0005){
+          const s=tauCetiTrack(Math.floor(st.tfTauCeti))*st.gains.tauCeti;
           l+=s; r+=s;
         }
         L[i]=Math.max(-1,Math.min(1,l*st.vol));
