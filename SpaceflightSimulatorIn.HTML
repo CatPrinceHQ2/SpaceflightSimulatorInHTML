@@ -98,6 +98,17 @@
   .menu-btn.primary{background:var(--primary);color:var(--bg);}
   .menu-btn.primary:hover{background:var(--accent);border-color:var(--accent);color:#fff;}
   .menu-foot{font-size:11px;color:#888;text-align:center;margin-top:6px;}
+  .menu-social{display:flex;gap:8px;justify-content:center;margin-top:2px;}
+  .menu-social a{
+    flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);
+    font-family:var(--font-body);font-weight:700;font-size:11px;
+    padding:8px 6px;text-decoration:none;cursor:pointer;border-radius:0;
+    letter-spacing:.02em;transition:border-color .15s ease,color .15s ease;
+  }
+  .menu-social a:hover{border-color:var(--accent);color:var(--accent);}
+  .menu-social a .ic{font-size:13px;}
+  .menu-version{font-size:10px;color:#999;text-align:center;margin-top:2px;letter-spacing:.02em;}
 
   .float-panel{
     position:absolute;background:var(--panel-bg);border:1px solid var(--primary);
@@ -308,8 +319,14 @@
       <div class="menu-wrap">
         <div class="menu-card" id="mainMenuCard">
           <div class="menu-logo">SPACEFLIGHT SIM</div>
-          <div class="menu-sub">Made by CatPrinceHQ2 - Some modded features that made it into the main game are by KampfGuy.</div>
+          <div class="menu-sub">Made by CatPrinceHQ - Some modded features that made it into the main game are by KampfGuy.</div>
           <button class="menu-btn primary" id="menuPlayBtn">Play!</button>
+          <div class="menu-social">
+            <a href="https://youtube.com/@catprincehq" target="_blank" rel="noopener"><span class="ic">▶</span>Youtube</a>
+            <a href="https://discord.gg/catprincehq" target="_blank" rel="noopener"><span class="ic">💬</span>Discord</a>
+            <a href="https://www.tiktok.com/@catprince.hq?lang=en" target="_blank" rel="noopener"><span class="ic">♫</span>Tiktok</a>
+          </div>
+          <div class="menu-version">SFSIHTML vR.1.3.1</div>
         </div>
       </div>
     </div>
@@ -1382,7 +1399,7 @@ function drawPartShape(ctx,d,x,y,w,h){
       ctx.fillRect(x+w*(0.18+i*0.24), y+h*(0.25+j*0.28), w*0.16, h*0.16);
     ctx.strokeStyle='rgba(200,220,255,0.4)'; ctx.lineWidth=1;
     ctx.beginPath(); ctx.arc(x+w/2,y+h*0.12,Math.min(w,h)*0.12,0,Math.PI*2); ctx.stroke();
-    const credit=d.credit||'Rough_Capital1339/CatPrinceHQ2';
+    const credit=d.credit||'Rough_Capital1339/CatPrinceHQ';
     ctx.fillStyle='rgba(220,230,255,0.85)';
     ctx.font=Math.max(7, Math.min(w,h)*0.11)+'px monospace';
     ctx.textAlign='center'; ctx.textBaseline='middle';
