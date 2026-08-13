@@ -116,6 +116,7 @@
   .part-card{background:var(--bg);border:1px solid var(--primary);padding:var(--sp-3);cursor:pointer;border-radius:0;}
   .part-card:hover{border-color:var(--accent);}
   .part-card.selected{border-color:var(--accent);background:#fff0ea;}
+  .part-card.selected .pname{color:#1A1A1A;}
   .part-card .pname{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:var(--sp-2);}
   .part-card .swatch{width:11px;height:11px;border:1px solid var(--primary);flex-shrink:0;}
   .part-card .pstats{font-size:10.5px;color:#555;margin-top:var(--sp-2);line-height:1.55;}
@@ -384,7 +385,7 @@
       </div>
 
       <div class="float-panel float-staging" id="stagingPanel" style="display:none;">
-        <h3 id="stagingTitle">Staging</h3>
+        <h3 id="stagingTitle">Functions</h3>
         <div id="stagingList"></div>
       </div>
 
@@ -917,6 +918,7 @@ const PARTS = {
   legs:  {id:'legs', name:'Landing Legs',      w:2,h:2,dryMass:90,  fuel:0,    thrust:0,      fuelRate:0,  color:'#6a6e74',type:'legs',cat:'Utility'},
   solar: {id:'solar',name:'Solar Panel',       w:4,h:1,dryMass:45,  fuel:0,    thrust:0,      fuelRate:0,  color:'#1a3a7a',type:'solar',cat:'Utility'},
   ionStorage:{id:'ionStorage',name:'Ion Storage', w:2,h:2,dryMass:80, fuel:0,  thrust:0,      fuelRate:0,  color:'#2a5a3a',type:'ionstorage',cat:'Utility'},
+  fuelComp:{id:'fuelComp',name:'Fuel Compressor', w:4,h:3,dryMass:1650, rawMass:2200, fuel:0, thrust:0, fuelRate:0, color:'#23262b',type:'fuelcompressor',cat:'Utility'},
   coneS: {id:'coneS',name:'Nose Cone — Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',cat:'Aero',dragMult:0.7},
   coneM: {id:'coneM',name:'Nose Cone — Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',cat:'Aero',dragMult:0.55},
   coneL: {id:'coneL',name:'Nose Cone — Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',cat:'Aero',dragMult:0.4},
@@ -928,6 +930,10 @@ const PARTS = {
 const PART_LIST = Object.values(PARTS);
 const PART_CATS = ['Command','Fuel','Engines','Staging','Aero','Utility'];
 const ION_STORAGE_CAPACITY=100;
+const FUELCOMP_MAX_ION=20000;
+const FUELCOMP_HOURS=4;
+const FUELCOMP_ION_PER_SEC=FUELCOMP_MAX_ION/(FUELCOMP_HOURS*3600);
+const FUELCOMP_FUEL_PER_ION=0.8;
 let paletteCat = 'All';
 
 // ============================================================
@@ -1023,6 +1029,8 @@ function drawPartShape(ctx,d,x,y,w,h){
       roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.08);
     }
   } else if(d.type==='solidfuel'){
+    roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.1);
+  } else if(d.type==='fuelcompressor'){
     roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.1);
   } else {
     roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.12);
@@ -1426,6 +1434,19 @@ function drawPartShape(ctx,d,x,y,w,h){
     }
   }
 
+  if(d.type==='fuelcompressor'){
+    ctx.fillStyle='#4a4f56';
+    ctx.fillRect(x+w*0.18,y-h*0.05,w*0.64,h*0.12);
+    ctx.fillRect(x+w*0.18,y+h*0.93,w*0.64,h*0.12);
+    ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1;
+    ctx.strokeRect(x+w*0.18,y-h*0.05,w*0.64,h*0.12);
+    ctx.strokeRect(x+w*0.18,y+h*0.93,w*0.64,h*0.12);
+    ctx.fillStyle='#0e2e2e';
+    ctx.fillRect(x+w*0.06,y+h*0.24,w*0.88,h*0.14);
+    ctx.fillRect(x+w*0.06,y+h*0.62,w*0.88,h*0.14);
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.strokeRect(x,y,w,h);
+  }
+
   if(d.type==='wing'){
     // airfoil shading + panel lines
     const wg=ctx.createLinearGradient(x,y,x,y+h);
@@ -1590,10 +1611,18 @@ function buildPalette(){
   PART_LIST.filter(p=>paletteCat==='All'||p.cat===paletteCat).forEach(p=>{
     const card=document.createElement('div');
     card.className='part-card'+(p.id===selectedPartId?' selected':'');
-    let statsHtml=`${p.w}×${p.h} cells &nbsp;·&nbsp; mass ${p.dryMass}`;
+    let statsHtml=`${p.w}×${p.h} cells &nbsp;·&nbsp; mass ${p.dryMass+(p.rawMass||0)}`;
+    if(p.type==='pod') statsHtml+=`<br>The main piece of your ship. Seperators will remove the piece of the ship with the least of these.`;
     if(p.type==='tank') statsHtml+=`<br>fuel capacity ${p.fuel}`;
+    if(p.id==='tankS') statsHtml+=`<br>Small fuel for small applications.`;
+    if(p.id==='tankM') statsHtml+=`<br>Medium fuel for bigger engines and medium sized missions.`;
+    if(p.id==='tankL') statsHtml+=`<br>Big boy fuel for when you are getting OUT.`;
     if(p.type==='engine'&&!p.ionOnly) statsHtml+=`<br>thrust ${p.thrust.toLocaleString()} &nbsp;·&nbsp; burn ${p.fuelRate}/s`;
     if(p.type==='engine'&&p.ionOnly) statsHtml+=`<br>thrust ${p.thrust.toLocaleString()} &nbsp;·&nbsp; ion draw ${p.fuelRate}/s &nbsp;·&nbsp; draws only from Ion Storage`;
+    if(p.id==='engB') statsHtml+=`<br>Basic engine for basic needs.`;
+    if(p.id==='engA') statsHtml+=`<br>Advanced engine. It doesn't play games.`;
+    if(p.id==='engQB') statsHtml+=`<br>This is if you need a fast engine that's fast. Eats fuel quick though.`;
+    if(p.id==='engQA') statsHtml+=`<br>Unreasonable. Just unreasonable.`;
     if(p.type==='chute') statsHtml+=`<br>deploy in flight to boost atmospheric braking`;
     if(p.type==='separator') statsHtml+=`<br>activate in flight to split the rocket in two`;
     if(p.type==='dock') statsHtml+=`<br>yellow arrow = connecting side &nbsp;·&nbsp; press R to rotate &nbsp;·&nbsp; snaps two ships together when the arrows meet face to face`;
@@ -1604,6 +1633,9 @@ function buildPalette(){
     if(p.type==='fairing') statsHtml+=`<br>reduces air drag when mounted on a tank`;
     if(p.type==='solar') statsHtml+=`<br>speeds up nearby Ion Storage charging &nbsp;·&nbsp; more panels = faster charge`;
     if(p.type==='ionstorage') statsHtml+=`<br>stores ${ION_STORAGE_CAPACITY} ion charge &nbsp;·&nbsp; recharges near stars, much faster the closer you are &nbsp;·&nbsp; needs Solar Panels to charge`;
+    if(p.type==='fuelcompressor') statsHtml+=`<br>A heavy electronic beast which can cook up fuel. Not very efficient, but smaller than a fuel tank if you can wait given you have the ion power to supply it.`
+      +`<ul class="pstats-bullets"></li>`
+      +`<li>Produces 2200 fuel</li><li>-20,000 ion charge to do this</li></ul>`;
     card.innerHTML=`<div class="pname"><span class="swatch" style="background:${p.color}"></span>${p.name}</div>
       <div class="pstats">${statsHtml}</div>`;
     card.onclick=()=>{ selectedPartId=p.id; buildPalette(); };
@@ -1839,11 +1871,25 @@ function drawGrid(){
   if(buildIonWires.length){
     strokeIonWires(gctx,buildIonWires,p=>({x:ox+p.x*cellPx,y:oy+p.y*cellPx}),Math.max(1.2,cellPx*0.06));
   }
+  const buildCompWires=computeShipCompressorWires(placedParts);
+  if(buildCompWires.length){
+    strokeIonWires(gctx,buildCompWires,p=>({x:ox+p.x*cellPx,y:oy+p.y*cellPx}),Math.max(1.2,cellPx*0.11));
+  }
   if(hoverCell&&mode==='build'&&!panState){
     const d=PARTS[selectedPartId];
     const eff=effDims(selectedPartId,selectedRot);
     const c=Math.min(Math.max(hoverCell.col,0),COLS-eff.w), r=Math.min(Math.max(hoverCell.row,0),ROWS-eff.h);
     const ok=canPlace(selectedPartId,c,r,selectedRot);
+    if(ok&&d.type==='separator'){
+      // highlight parts the separator would get rid of on activation
+      const hypFp={col:c,row:r,w:eff.w,h:eff.h};
+      const {discard}=splitPartsBySeparator(placedParts,hypFp,selectedRot);
+      gctx.fillStyle='rgba(255,221,0,0.45)';
+      discard.forEach(pp=>{
+        const dfp=placedFootprint(pp);
+        gctx.fillRect(ox+dfp.col*cellPx,oy+dfp.row*cellPx,dfp.w*cellPx,dfp.h*cellPx);
+      });
+    }
     const x=ox+c*cellPx, y=oy+r*cellPx;
     const ew=eff.w*cellPx, eh=eff.h*cellPx;
     gctx.fillStyle=ok?'rgba(255,69,0,0.22)':'rgba(211,47,47,0.28)';
@@ -1861,7 +1907,7 @@ function statsFromParts(parts){
   let dryMass=0,fuel=0,thrust=0,fuelRate=0,pods=0,engines=0,chutes=0,seps=0,solarPanels=0,ionStorages=0;
   parts.forEach(pp=>{
     const d=PARTS[pp.id];
-    dryMass+=d.dryMass; fuel+=d.fuel; thrust+=d.thrust; fuelRate+=d.fuelRate;
+    dryMass+=d.dryMass+(d.rawMass||0); fuel+=d.fuel; thrust+=d.thrust; fuelRate+=d.fuelRate;
     if(d.type==='pod') pods++;
     if(d.type==='engine') engines++;
     if(d.type==='chute') chutes++;
@@ -1987,11 +2033,49 @@ function computeIonWirePath(storagePP,enginePP){
   }
   return points;
 }
+function computeCompressorConnections(parts){
+  const comps=parts.filter(pp=>PARTS[pp.id].type==='fuelcompressor');
+  const tanks=parts.filter(pp=>PARTS[pp.id].type==='tank');
+  const connections={};
+  comps.forEach(comp=>{
+    if(!tanks.length) return;
+    const cfp=placedFootprint(comp);
+    const ccx=cfp.col+cfp.w/2, ccy=cfp.row+cfp.h/2;
+    let best=null,bestD=Infinity;
+    tanks.forEach(tk=>{
+      const tfp=placedFootprint(tk);
+      const d=Math.hypot(ccx-(tfp.col+tfp.w/2),ccy-(tfp.row+tfp.h/2));
+      if(d<bestD){ bestD=d; best=tk; }
+    });
+    connections[comp.uid]=best.uid;
+  });
+  return connections;
+}
+// copy ion wiring stuf
+function computeShipCompressorWires(parts){
+  const comps=parts.filter(pp=>PARTS[pp.id].type==='fuelcompressor');
+  if(!comps.length) return [];
+  const tanks=parts.filter(pp=>PARTS[pp.id].type==='tank');
+  if(!tanks.length) return [];
+  const wires=[];
+  comps.forEach(comp=>{
+    const cfp=placedFootprint(comp);
+    const ccx=cfp.col+cfp.w/2, ccy=cfp.row+cfp.h/2;
+    let best=null,bestD=Infinity;
+    tanks.forEach(tk=>{
+      const tfp=placedFootprint(tk);
+      const d=Math.hypot(ccx-(tfp.col+tfp.w/2),ccy-(tfp.row+tfp.h/2));
+      if(d<bestD){ bestD=d; best=tk; }
+    });
+    wires.push({points:computeIonWirePath(best,comp),color:'#0a0a0a'});
+  });
+  return wires;
+}
 function computeShipIonWires(parts){
   const engines=parts.filter(pp=>PARTS[pp.id].ionOnly);
-  if(!engines.length) return [];
+  const compressors=parts.filter(pp=>PARTS[pp.id].type==='fuelcompressor');
   const storages=parts.filter(pp=>PARTS[pp.id].type==='ionstorage');
-  if(!storages.length) return [];
+  if((!engines.length&&!compressors.length)||!storages.length) return [];
   const wires=[];
   engines.forEach(eng=>{
     const efp=placedFootprint(eng);
@@ -2005,6 +2089,13 @@ function computeShipIonWires(parts){
     const points=computeIonWirePath(best,eng);
     const color=ION_WIRE_COLORS[Math.abs(hashUidPair(best.uid,eng.uid))%ION_WIRE_COLORS.length];
     wires.push({points,color});
+  });
+  compressors.forEach(comp=>{
+    storages.forEach(st=>{
+      const points=computeIonWirePath(st,comp);
+      const color=ION_WIRE_COLORS[Math.abs(hashUidPair(st.uid,comp.uid))%ION_WIRE_COLORS.length];
+      wires.push({points,color});
+    });
   });
   return wires;
 }
@@ -2098,6 +2189,10 @@ function buildSprite(parts){
   if(spriteIonWires.length){
     strokeIonWires(ctx,spriteIonWires,p=>({x:(p.x-minC)*SPRITE_RASTER_CELL,y:(p.y-minR)*SPRITE_RASTER_CELL}),Math.max(1.2,SPRITE_RASTER_CELL*0.06));
   }
+  const spriteCompWires=computeShipCompressorWires(parts);
+  if(spriteCompWires.length){
+    strokeIonWires(ctx,spriteCompWires,p=>({x:(p.x-minC)*SPRITE_RASTER_CELL,y:(p.y-minR)*SPRITE_RASTER_CELL}),Math.max(1.2,SPRITE_RASTER_CELL*0.11));
+  }
   return {canvas:cnv, cellsW, cellsH, comXc, comYc, minC, minR};
 }
 function shipFootOffset(ship){
@@ -2141,6 +2236,31 @@ function ionChargeRate(shipPos,simTimeNow,solarPanelCount){
 }
 // Advances one ship's Ion Storage charge for a slice of simSeconds — called once per
 // ship per frame from loop() for every non-crashed ship, flying or landed.
+function runFuelCompressors(ship,simSeconds){
+  if(!ship.compressorOn) return;
+  ship.parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    if(d.type!=='fuelcompressor'||!ship.compressorOn[pp.uid]) return;
+    const tankUid=ship.compressorConnections?ship.compressorConnections[pp.uid]:null;
+    if(tankUid===undefined||tankUid===null) return;
+    const tankPP=ship.parts.find(t=>t.uid===tankUid);
+    if(!tankPP) return;
+    const cap=PARTS[tankPP.id].fuel;
+    const cur=ship.tankFuel[tankUid]||0;
+    if(cur>=cap) return; // refuses when tank full
+    const used=ship.compressorIon[pp.uid]||0;
+    const remaining=FUELCOMP_MAX_ION-used;
+    if(remaining<=0) return;
+    const ionNeededToFill=(cap-cur)/FUELCOMP_FUEL_PER_ION;
+    const ionUsed=Math.min(FUELCOMP_ION_PER_SEC*simSeconds,remaining,ship.ionCharge||0,ionNeededToFill);
+    if(ionUsed<=0) return;
+    ship.ionCharge-=ionUsed;
+    ship.tankFuel[tankUid]=cur+ionUsed*FUELCOMP_FUEL_PER_ION;
+    ship.compressorIon[pp.uid]=used+ionUsed;
+    ship.dryMass=Math.max(0,ship.dryMass-(d.rawMass||0)*(ionUsed/FUELCOMP_MAX_ION));
+  });
+  ship.fuel=Object.values(ship.tankFuel).reduce((a,b)=>a+b,0);
+}
 function chargeIonStorage(ship,simSeconds,simTimeNow){
   if(!ship.ionCap) return;
   const rate=ionChargeRate(ship.pos,simTimeNow,ship.solarPanels||0);
@@ -2159,7 +2279,16 @@ function recomputeShipFromParts(ship){
   const keepUids=new Set(ship.parts.map(pp=>String(pp.uid)));
   Object.keys(ship.tankFuel).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.tankFuel[uid]; });
   Object.keys(ship.engineEnabled).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.engineEnabled[uid]; });
+  if(ship.compressorOn) Object.keys(ship.compressorOn).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.compressorOn[uid]; });
+  if(ship.compressorIon) Object.keys(ship.compressorIon).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.compressorIon[uid]; });
   ship.engineConnections=computeEngineConnections(ship.parts);
+  ship.compressorConnections=computeCompressorConnections(ship.parts);
+  ship.parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    if(d.type!=='fuelcompressor'||!ship.compressorIon) return;
+    const used=ship.compressorIon[pp.uid]||0;
+    ship.dryMass=Math.max(0,ship.dryMass-(d.rawMass||0)*(used/FUELCOMP_MAX_ION));
+  });
   ship.fuel=Object.values(ship.tankFuel).reduce((a,b)=>a+b,0);
   if(s.engines===0) ship.engineOn=false;
   if(s.chutes===0) ship.chuteDeployed=false;
@@ -2317,6 +2446,9 @@ function launch(){
   const engineEnabled={};
   parts.forEach(pp=>{ if(PARTS[pp.id].type==='engine') engineEnabled[pp.uid]=true; });
   const engineConnections=computeEngineConnections(parts);
+  const compressorOn={}, compressorIon={};
+  parts.forEach(pp=>{ if(PARTS[pp.id].type==='fuelcompressor'){ compressorOn[pp.uid]=false; compressorIon[pp.uid]=0; } });
+  const compressorConnections=computeCompressorConnections(parts);
   const ship={
     id:'ship-'+shipCounter, name:'Ship '+shipCounter,
     parts, sprite,
@@ -2327,6 +2459,7 @@ function launch(){
     thrust:stats.thrust, fuelRate:stats.fuelRate,
     solarPanels:stats.solarPanels, ionCap:stats.ionStorages*ION_STORAGE_CAPACITY, ionCharge:0,
     tankFuel, engineEnabled, engineConnections,
+    compressorOn, compressorIon, compressorConnections,
     engineOn:false, throttle:1, chuteDeployed:false,
     status:'landed', statusMsg:'Ready for launch on Earth.',
     trail:makeTrail(), lastTrailPos:null, _inAtmo:true, _domBody:EARTH,
@@ -2341,8 +2474,7 @@ function launch(){
   activeShipIdx=ships.length-1;
   camera.x=ship.pos.x; camera.y=ship.pos.y;
   camera.metersPerPixel=0.5; camera.angle=0;
-  el('buildScreen').classList.remove('active');
-  el('flightScreen').classList.add('active');
+  showScreen('flightScreen');
   el('toBuildBtn').style.display='inline-block';
   mode='flight';
   el('throttleSlider').value=100; hud.throttle.textContent='100%';
@@ -2351,32 +2483,36 @@ function launch(){
 }
 el('launchBtn').onclick=launch;
 
+// FORCE no multiple screen hopefully
+function showScreen(name){
+  ['menuScreen','buildScreen','flightScreen'].forEach(id=>el(id).classList.remove('active'));
+  el(name).classList.add('active');
+}
+
 el('menuPlayBtn').onclick=()=>{
-  el('menuScreen').classList.remove('active');
   // go to saved game instead of build
   if(pendingRestoredFlight){
     pendingRestoredFlight=false;
-    el('flightScreen').classList.add('active');
+    showScreen('flightScreen');
     el('toBuildBtn').style.display='inline-block';
     mode='flight';
   } else {
-    el('buildScreen').classList.add('active');
-    resetBuildMusicCycle();
+    showScreen('buildScreen');
+    el('toBuildBtn').style.display='none';
     drawGrid();
   }
 };
 // menu bottoooon
 el('menuBtn').onclick=()=>{
-  el('buildScreen').classList.remove('active');
-  el('flightScreen').classList.remove('active');
-  el('menuScreen').classList.add('active');
+  showScreen('menuScreen');
+  el('toBuildBtn').style.display='none';
+  resetMenuMusicCycle();
 };
 
 el('toBuildBtn').onclick=()=>{
-  el('flightScreen').classList.remove('active');
-  el('buildScreen').classList.add('active');
+  showScreen('buildScreen');
   el('toBuildBtn').style.display='none';
-  mode='build'; resetBuildMusicCycle(); drawGrid();
+  mode='build'; drawGrid();
 };
 
 // ============================================================
@@ -2392,6 +2528,7 @@ function saveShips(){
         dryMass:s.dryMass, fuel:s.fuel, fuelCap:s.fuelCap,
         thrust:s.thrust, fuelRate:s.fuelRate,
         tankFuel:s.tankFuel, engineEnabled:s.engineEnabled,
+        compressorOn:s.compressorOn, compressorIon:s.compressorIon,
         throttle:s.throttle, chuteDeployed:s.chuteDeployed,
         status:s.status, ionCharge:s.ionCharge||0,
       }));
@@ -2413,9 +2550,15 @@ function loadShips(){
       const sprite=buildSprite(parts);
       const tankFuel=s.tankFuel||{};
       const engineEnabled=s.engineEnabled||{};
+      const compressorOn=s.compressorOn||{};
+      const compressorIon=s.compressorIon||{};
       parts.forEach(pp=>{
         if(PARTS[pp.id].type==='tank'&&!(pp.uid in tankFuel)) tankFuel[pp.uid]=PARTS[pp.id].fuel;
         if(PARTS[pp.id].type==='engine'&&!(pp.uid in engineEnabled)) engineEnabled[pp.uid]=true;
+        if(PARTS[pp.id].type==='fuelcompressor'){
+          if(!(pp.uid in compressorOn)) compressorOn[pp.uid]=false;
+          if(!(pp.uid in compressorIon)) compressorIon[pp.uid]=0;
+        }
       });
       const ps=statsFromParts(parts);
       const ionCap=ps.ionStorages*ION_STORAGE_CAPACITY;
@@ -2426,6 +2569,7 @@ function loadShips(){
         thrust:s.thrust, fuelRate:s.fuelRate,
         solarPanels:ps.solarPanels, ionCap, ionCharge:Math.min(ionCap,typeof s.ionCharge==='number'?s.ionCharge:0),
         tankFuel, engineEnabled, engineConnections:computeEngineConnections(parts),
+        compressorOn, compressorIon, compressorConnections:computeCompressorConnections(parts),
         engineOn:false, throttle:typeof s.throttle==='number'?s.throttle:1,
         chuteDeployed:!!s.chuteDeployed,
         status:'flying', statusMsg:'',
@@ -2799,13 +2943,15 @@ function renderStagingList(){
   const panel=el('stagingPanel');
   const wrap=el('stagingList');
   const title=el('stagingTitle');
-  if(!sh||sh.status!=='flying'){ panel.style.display='none'; return; }
+  if(!sh||sh.status==='crashed'){ panel.style.display='none'; return; }
+  const flying=sh.status==='flying';
   const seps=[];
-  sh.parts.forEach((pp,i)=>{ if(PARTS[pp.id].type==='separator') seps.push(i); });
-  const engines=sh.parts.filter(pp=>PARTS[pp.id].type==='engine');
-  if(!seps.length&&!engines.length){ panel.style.display='none'; return; }
+  if(flying) sh.parts.forEach((pp,i)=>{ if(PARTS[pp.id].type==='separator') seps.push(i); });
+  const engines=flying?sh.parts.filter(pp=>PARTS[pp.id].type==='engine'):[];
+  const compressors=sh.parts.filter(pp=>PARTS[pp.id].type==='fuelcompressor');
+  if(!seps.length&&!engines.length&&!compressors.length){ panel.style.display='none'; return; }
   panel.style.display='block';
-  title.textContent=seps.length&&engines.length?'Staging & Engines':(engines.length?'Engines':'Staging');
+  title.textContent='Functions'; // renamed from Engines, modders, this is the engines menu
   wrap.innerHTML='';
   seps.forEach((idx,n)=>{
     const row=document.createElement('div');
@@ -2835,22 +2981,54 @@ function renderStagingList(){
       row.appendChild(btn); wrap.appendChild(row);
     });
   }
+  if(compressors.length){
+    if(seps.length||engines.length){
+      const hr=document.createElement('div');
+      hr.style.cssText='border-top:1px solid var(--secondary);margin:6px 0;';
+      wrap.appendChild(hr);
+    }
+    compressors.forEach((pp,n)=>{
+      const on=!!(sh.compressorOn&&sh.compressorOn[pp.uid]);
+      const row=document.createElement('div');
+      row.className='stage-row engine-row';
+      row.innerHTML='<span>Compressor '+(n+1)+'</span>';
+      const btn=document.createElement('button');
+      btn.className='btn small'+(on?'':' danger');
+      btn.textContent=on?'ON':'OFF';
+      btn.title='Click to '+(on?'disable':'enable')+' this Fuel Compressor';
+      btn.onclick=()=>{
+        if(!sh.compressorOn) sh.compressorOn={};
+        sh.compressorOn[pp.uid]=!on;
+        renderStagingList(); renderFuelList();
+      };
+      row.appendChild(btn); wrap.appendChild(row);
+    });
+  }
+}
+// rewritten
+function splitPartsBySeparator(parts,sepFp,rot){
+  const r=((rot||0)%360+360)%360;
+  const rowCut=(r%180===0);
+  const sepCenter=rowCut?sepFp.row+sepFp.h/2:sepFp.col+sepFp.w/2;
+  const sideA=[],sideB=[];
+  parts.forEach(pp=>{
+    const fp=placedFootprint(pp);
+    const center=rowCut?fp.row+fp.h/2:fp.col+fp.w/2;
+    (center<sepCenter?sideA:sideB).push(pp);
+  });
+  const podsA=sideA.filter(pp=>PARTS[pp.id].type==='pod').length;
+  const podsB=sideB.filter(pp=>PARTS[pp.id].type==='pod').length;
+  const facingB=(r===180||r===270);
+  const keep=podsA!==podsB?(podsB>podsA?sideB:sideA):(facingB?sideB:sideA);
+  const discard=podsA!==podsB?(podsB>podsA?sideA:sideB):(facingB?sideA:sideB);
+  return {keep,discard};
 }
 function activateSeparator(ship,sepIdx){
   const sepPP=ship.parts[sepIdx];
   const sepFp=placedFootprint(sepPP);
-  const sepCenterRow=sepFp.row+sepFp.h/2;
-  const top=[],bottom=[];
-  ship.parts.forEach((pp,i)=>{
-    if(i===sepIdx) return;
-    const fp=placedFootprint(pp);
-    const center=fp.row+fp.h/2;
-    (center<sepCenterRow?top:bottom).push(pp);
-  });
-  const topPods=top.filter(pp=>PARTS[pp.id].type==='pod').length;
-  const bottomPods=bottom.filter(pp=>PARTS[pp.id].type==='pod').length;
-  const keep=bottomPods>topPods?bottom:top;
-  const discarded=ship.parts.length-1-keep.length;
+  const others=ship.parts.filter((pp,i)=>i!==sepIdx);
+  const {keep,discard}=splitPartsBySeparator(others,sepFp,partRot(sepPP));
+  const discarded=discard.length;
   ship.parts=keep;
   if(!ship.parts.length){ destroyShip(ship,ship.name+' had no parts left after staging.'); return; }
   recomputeShipFromParts(ship);
@@ -2864,7 +3042,8 @@ function renderFuelList(){
   const wrap=el('fuelList');
   if(!sh||sh.status==='crashed'){ panel.style.display='none'; return; }
   const tanks=sh.parts.filter(pp=>PARTS[pp.id].type==='tank');
-  if(!tanks.length&&!sh.ionCap){ panel.style.display='none'; return; }
+  const compressors=sh.parts.filter(pp=>PARTS[pp.id].type==='fuelcompressor');
+  if(!tanks.length&&!sh.ionCap&&!compressors.length){ panel.style.display='none'; return; }
   panel.style.display='block';
   wrap.innerHTML='';
   tanks.forEach((pp,n)=>{
@@ -2887,6 +3066,18 @@ function renderFuelList(){
       +`<span class="fuel-pct">${pct}%</span>`;
     wrap.appendChild(row);
   }
+  compressors.forEach((pp,n)=>{
+    const used=(sh.compressorIon&&sh.compressorIon[pp.uid])||0;
+    const pct=Math.round(100*used/FUELCOMP_MAX_ION);
+    const on=!!(sh.compressorOn&&sh.compressorOn[pp.uid]);
+    const row=document.createElement('div');
+    row.className='fuel-row';
+    row.title='Toggle this in the Functions panel';
+    row.innerHTML=`<span class="fuel-name">Compressor ${n+1} (${on?'ON':'OFF'})</span>`
+      +`<span class="fuel-bar-wrap"><span class="fuel-bar" style="width:${pct}%;"></span></span>`
+      +`<span class="fuel-pct">${pct}%</span>`;
+    wrap.appendChild(row);
+  });
 }
 
 // ---------- Rotation input ----------
@@ -4192,6 +4383,21 @@ function drawShip(sh){
         fctx.closePath(); fctx.fill();
       });
     }
+    if(sh.compressorOn){
+      // epic cyan glow for comp
+      const glow=0.55+0.35*Math.sin(performance.now()/220);
+      fctx.fillStyle=`rgba(80,230,230,${glow})`;
+      sh.parts.forEach(pp=>{
+        const d=PARTS[pp.id];
+        if(d.type!=='fuelcompressor'||!sh.compressorOn[pp.uid]) return;
+        const eff=effDims(pp.id,partRot(pp));
+        const cx=((pp.col-sh.sprite.minC+eff.w/2)-sh.sprite.comXc)*detailScale;
+        const cy=((pp.row-sh.sprite.minR+eff.h/2)-sh.sprite.comYc)*detailScale;
+        const bw=eff.w*detailScale*0.88, bh=eff.h*detailScale*0.14;
+        fctx.fillRect(cx-bw/2,cy-eff.h*detailScale*0.26,bw,bh);
+        fctx.fillRect(cx-bw/2,cy+eff.h*detailScale*0.12,bw,bh);
+      });
+    }
     if(sh.chuteDeployed){
       fctx.strokeStyle='rgba(230,230,230,0.85)';
       fctx.lineWidth=Math.max(1,detailScale*0.06);
@@ -4497,6 +4703,15 @@ function tauCetiTrack(t){
   const v=min(255,(b<96?e(0,6,32,16):e(88,16,104,8))*L(W[+(b>7&&b<32)],X[+(b>16)])/3+(b<96&&e(38,10,88,16)*L(W[b>64?3:2],X[b>71?1:b>56?3:2])/3)+(b>32&&e(28,12,48,32)*L(W[4],X[4])/5)+e(0,8,104,8)*(B(0)+B(1))/10+((b<32||b>48)&&(b<71||b>80)&&(b>16&&b<103&&.4*R(G(V[T&31])>>9))+(b>8&&b<96&&D(1E6)*M(0xEAEAAAEA,1))/5)+(b>7&&b<104&&(b<71||b>72)&&32*(sin(180*(T%1)**.4)+1)*M(0x44490449,0)+.6*D(300)*M(0xC4444444,1)));
   return byteToSample(v);
 }
+function buildTrack(tIn){
+  const sin=Math.sin,PI=Math.PI;
+  let t=tIn/1.48;
+  const s=t*.9;
+  const a=t/2*2**([-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-17,-15,-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-17,-15,-12,-12,0,-12,-12,0,-12,-12,0,-12,-12,0,-12,-12,0,-12,-10,-10,2,-10,-10,2,-10,-10,2,-10,-10,2,-8,4,-10,0][s>>12&63]/12)%128+48+sin(t/8192*PI)*7&128;
+  const r=t*sin(t>>3)*(s>>14&1)&~s>>7&127^1E5/(s&16383);
+  const b=c=>c>0&&3*t/4*2**([9,9,9,9,,,7,,9,12,,9,9,,7,,9,9,9,9,,,7,,9,12,9,,7,9,9,,12,12,12,12,,,12,12,17,,16,16,16,,,,14,14,14,,7,7,7,,14,14,14,17,,16,17][c>>12&63]/12-sin(s/2048*PI)*3/c)%128+16&128;
+  return [byteToSample(a^r), byteToSample(b(s)+b(s-8192)/3^r)];
+}
 `;
 const FADE_SECONDS = 1.6;
 const BYTEBEAT_WORKLET_SRC = BYTEBEAT_TRACKS_SRC + `
@@ -4507,14 +4722,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
   }
   constructor(){
     super();
-    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0}; 
-    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0}; 
-    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; 
+    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0}; 
+    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0}; 
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfBuild=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
-        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0,tauCeti:0}; 
+        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0}; 
         this.targetGains[d.value]=1;
       }
     };
@@ -4524,14 +4739,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate;
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rBuild=56000/sampleRate;
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
         if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
         else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
       }
-      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; 
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; this.tfBuild+=rBuild; 
       let l=0,r=0;
       if(this.gains.atmo>0.0005){
         const s=atmoTrack(Math.floor(this.tfAtmo));
@@ -4557,6 +4772,10 @@ class BytebeatProcessor extends AudioWorkletProcessor {
         const s=tauCetiTrack(Math.floor(this.tfTauCeti))*this.gains.tauCeti;
         l+=s; r+=s;
       }
+      if(this.gains.build>0.0005){
+        const s=buildTrack(Math.floor(this.tfBuild));
+        l+=s[0]*this.gains.build; r+=s[1]*this.gains.build;
+      }
       L[i]=Math.max(-1,Math.min(1,l*v));
       R[i]=Math.max(-1,Math.min(1,r*v));
     }
@@ -4568,19 +4787,20 @@ registerProcessor('bytebeat-processor', BytebeatProcessor);
 let musicCtx=null, musicNode=null, musicVolume=0.35, musicLastState=null, musicStarting=false;
 // fix chromebook fallback
 let musicScriptNode=null, musicFallbackState=null, musicFallbackFns=null;
-// Build Grid has no flight state to key music off of, so it cycles through every track instead.
-const BUILD_MUSIC_ORDER=['atmo','soi','interplanetary','interstellar','nightVision','tauCeti'];
-const BUILD_MUSIC_CYCLE_MS=120000; // 2 minutes per track
-let buildMusicCycleAnchor=null;
-function resetBuildMusicCycle(){ buildMusicCycleAnchor=null; }
-function buildMusicState(){
+// Main Menu has no flight state to key music off of, so it cycles through every track instead.
+const MENU_MUSIC_ORDER=['atmo','soi','interplanetary','interstellar','nightVision','tauCeti'];
+const MENU_MUSIC_CYCLE_MS=120000; // 2 minutes per track
+let menuMusicCycleAnchor=null;
+function resetMenuMusicCycle(){ menuMusicCycleAnchor=null; }
+function menuMusicState(){
   const now=performance.now();
-  if(buildMusicCycleAnchor===null) buildMusicCycleAnchor=now;
-  const idx=Math.floor((now-buildMusicCycleAnchor)/BUILD_MUSIC_CYCLE_MS)%BUILD_MUSIC_ORDER.length;
-  return BUILD_MUSIC_ORDER[idx];
+  if(menuMusicCycleAnchor===null) menuMusicCycleAnchor=now;
+  const idx=Math.floor((now-menuMusicCycleAnchor)/MENU_MUSIC_CYCLE_MS)%MENU_MUSIC_ORDER.length;
+  return MENU_MUSIC_ORDER[idx];
 }
 function currentMusicState(){
-  if(el('buildScreen').classList.contains('active')) return buildMusicState();
+  if(el('buildScreen').classList.contains('active')) return 'build';
+  if(el('menuScreen').classList.contains('active')) return menuMusicState();
   const sh=activeShip();
   if(sh&&sh.status==='flying'){
     if(sh._domBody===ALPHA_CEN_A||sh._domBody===ALPHA_CEN_B||sh._domBody===PROXIMA) return 'nightVision';
@@ -4591,7 +4811,7 @@ function currentMusicState(){
   }
   return 'interplanetary';
 }
-const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky'};
+const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',build:'Assembly Line'};
 function updateMusicState(){
   if(!musicNode&&!musicFallbackState) return;
   const st=currentMusicState();
@@ -4602,7 +4822,7 @@ function updateMusicState(){
       musicNode.port.postMessage({type:'state',value:st});
     }else if(musicFallbackState){
       const tg=musicFallbackState.targetGains;
-      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0;
+      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.build=0;
       tg[st]=1;
     }
   }
@@ -4636,32 +4856,43 @@ function startMusicEngineFallback(){
     musicCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(!musicFallbackFns){
       musicFallbackFns=new Function(BYTEBEAT_TRACKS_SRC+
-        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack};')();
+        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack};')();
     }
-    const {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack}=musicFallbackFns;
+    const {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack}=musicFallbackFns;
     const sr=musicCtx.sampleRate;
     const st={
-      gains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0},
-      targetGains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0},
-      tfAtmo:0,tfInter:0,tfSoi:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,
+      gains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0},
+      targetGains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0},
+      tfAtmo:0,tfInter:0,tfSoi:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfBuild:0,
       fadeStep:1/(FADE_SECONDS*sr),
       vol:musicVolume,
     };
     musicFallbackState=st;
-    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr;
-    // No more music glitching on lag hopefully. I made buffer bigger. Means more lag overall but no glitchies when it does - modders, if you'd rather buggy music on lag in return for performance edit this
+    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rBuild=8000/sr;
+    // ScriptProcessorNode runs on the main thread (unlike AudioWorkletNode, our primary path above,
+    // which has its own realtime thread), so it competes with physics/render for CPU time. A bigger
+    // buffer only delays underruns, it can't prevent them - when the main thread does stall long enough,
+    // the callback is late, output silently drops to 0, and the jump back to the waveform is the click.
     musicScriptNode=musicCtx.createScriptProcessor(16384,0,2);
+    const declickSamples=Math.round(sr*0.008); // added basically prevents static crap from lag
+    st.lastCallbackTime=null;
     musicScriptNode.onaudioprocess=(e)=>{
+      const now=performance.now();
+      const expectedGapMs=(e.outputBuffer.length/sr)*1000;
+      // gap longer than expected means LAGz = music glitches = run the anti static
+      const stalled=st.lastCallbackTime!==null&&(now-st.lastCallbackTime)>expectedGapMs*1.5;
+      st.lastCallbackTime=now;
       const L=e.outputBuffer.getChannelData(0), R=e.outputBuffer.getChannelData(1);
       const volStep=1/(0.05*sr); 
       for(let i=0;i<L.length;i++){
+        const declick=stalled&&i<declickSamples?i/declickSamples:1;
         if(st.vol<musicVolume) st.vol=Math.min(musicVolume,st.vol+volStep);
         else if(st.vol>musicVolume) st.vol=Math.max(musicVolume,st.vol-volStep);
         for(const k in st.gains){
           if(st.gains[k]<st.targetGains[k]) st.gains[k]=Math.min(st.targetGains[k],st.gains[k]+st.fadeStep);
           else if(st.gains[k]>st.targetGains[k]) st.gains[k]=Math.max(st.targetGains[k],st.gains[k]-st.fadeStep);
         }
-        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti;
+        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti; st.tfBuild+=rBuild;
         let l=0,r=0;
         if(st.gains.atmo>0.0005){
           const s=atmoTrack(Math.floor(st.tfAtmo));
@@ -4687,8 +4918,12 @@ function startMusicEngineFallback(){
           const s=tauCetiTrack(Math.floor(st.tfTauCeti))*st.gains.tauCeti;
           l+=s; r+=s;
         }
-        L[i]=Math.max(-1,Math.min(1,l*st.vol));
-        R[i]=Math.max(-1,Math.min(1,r*st.vol));
+        if(st.gains.build>0.0005){
+          const s=buildTrack(Math.floor(st.tfBuild));
+          l+=s[0]*st.gains.build; r+=s[1]*st.gains.build;
+        }
+        L[i]=Math.max(-1,Math.min(1,l*st.vol*declick));
+        R[i]=Math.max(-1,Math.min(1,r*st.vol*declick));
       }
     };
     musicScriptNode.connect(musicCtx.destination);
@@ -4791,6 +5026,7 @@ function loop(now){
       s.pos.y=ppos.y+s.landedRelPos.y;
     }
     if(s.status!=='crashed') chargeIonStorage(s,simSeconds,simTime);
+    if(s.status!=='crashed') runFuelCompressors(s,simSeconds);
   });
   handleShipCollisions();
   if(ships.some(s=>s._pendingRemoval)){
