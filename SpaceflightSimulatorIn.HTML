@@ -517,7 +517,7 @@ const GM_SUN = 19908468035775750;
 const ATMO_DRAG_K = 0.0005;
 const PARACHUTE_DRAG_MULT = 40;
 const GAS_GIANT_CRUSH_DEPTH = 0.4;
-const WARP_LEVELS = [0,0.1,0.5,1,2,3,5,25,100,1000,10000,100000,1000000,1000000000]; //new warp levels bc landing on tiny little moons is hard at 1x
+const WARP_LEVELS = [0,0.1,0.5,1,2,3,5,25,100,1000,10000,100000,1000000,100000000]; //new warp levels bc landing on tiny little moons is hard at 1x
 const MAX_CONTROL_WARP = 3;
 // orbit ellipses drawn their screen size
 const ORBIT_MIN_PX = 4; //smallest screen before orbit lines are drawn on screen
@@ -770,6 +770,49 @@ PLANETS.push(...TAU_CETI_PLANETS);
 ALL_BODIES.push(TAU_CETI, ...TAU_CETI_PLANETS);
 const TAU_CETI_MAX_EXTENT = (TAU_CETI.soi+TAU_CETI_PLANETS[TAU_CETI_PLANETS.length-1].distance+TAU_CETI_PLANETS[TAU_CETI_PLANETS.length-1].soi)*1.5;
 
+// Gliese 876 loosely based on real valz
+const GLIESE876_REAL_LY = 15.2;
+const GLIESE876_DIR_ANGLE = ALPHA_CEN_DIR_ANGLE + 80.7*Math.PI/180;
+const GLIESE876_DIST_AU = ALPHA_CEN_GAME_DIST_AU * (GLIESE876_REAL_LY/ALPHA_CEN_REAL_LY);
+const GLIESE876_POS = {x:GLIESE876_DIST_AU*AU*Math.cos(GLIESE876_DIR_ANGLE), y:GLIESE876_DIST_AU*AU*Math.sin(GLIESE876_DIR_ANGLE)};
+const GM_GLIESE876 = 0.32*GM_SUN; // ~0.32x Sun's mass
+
+// real size tiny scaled up star/planet 1.5x their orbit 8x
+// ez star
+const GLIESE876 = {
+  key:'gliese876', name:'Gliese 876',
+  parent:null, pos:GLIESE876_POS,
+  color:'#e8623f', groundColor:null,
+  radius:SUN_RADIUS*0.54,
+  GM:GM_GLIESE876, GMbase:GM_GLIESE876,
+  solid:false, atmo:false,
+};
+BODIES_BY_KEY['gliese876']=GLIESE876;
+STAR_BODIES.push(GLIESE876);
+
+const GLIESE876_PLANET_DEFS = [
+  {key:'gliese876D',name:'Gliese 876 d',parent:'gliese876',color:'#6b1a1a',groundColor:'#4a1414',radius:371250, surfG:17,distAU:0.396,solid:true, atmo:true, atmoFrac:3.64,atmoColor:'#cc6633',eccMod:0.965},
+  {key:'gliese876C',name:'Gliese 876 c',parent:'gliese876',color:'#4a6f57',groundColor:null,     radius:2520000,surfG:40,distAU:2.448,solid:false,atmo:true,               atmoColor:'#3a2e28',eccMod:0.743},
+  {key:'gliese876B',name:'Gliese 876 b',parent:'gliese876',color:'#2e3446',groundColor:null,     radius:2587500,surfG:52,distAU:3.924,solid:false,atmo:true,               atmoColor:'#332a66',eccMod:0.966},
+  {key:'gliese876E',name:'Gliese 876 e',parent:'gliese876',color:'#6fe0d4',groundColor:null,     radius:855000, surfG:20,distAU:6.012,solid:false,atmo:true,               atmoColor:'#3fa8ac',eccMod:0.970},
+];
+GLIESE876.soi = 12.5*GLIESE876_PLANET_DEFS[GLIESE876_PLANET_DEFS.length-1].distAU*AU;
+const GLIESE876_PLANETS = GLIESE876_PLANET_DEFS.map((p,i)=>{
+  const distance = p.distAU*AU;
+  const GM = p.surfG*p.radius*p.radius*10;
+  const GMbase = p.surfG*p.radius*p.radius;
+  const omega = Math.sqrt(GLIESE876.GM/Math.pow(distance,3));
+  const initialAngle = (i/GLIESE876_PLANET_DEFS.length)*Math.PI*2;
+  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(355*GLIESE876.GM))*0.4)*4;
+  const ecc = eccFromMod(p.eccMod);
+  const body = Object.assign({},p,{distance,GM,GMbase,omega,initialAngle,soi,ecc});
+  BODIES_BY_KEY[body.key]=body;
+  return body;
+});
+PLANETS.push(...GLIESE876_PLANETS);
+ALL_BODIES.push(GLIESE876, ...GLIESE876_PLANETS);
+const GLIESE876_MAX_EXTENT = (GLIESE876.soi+GLIESE876_PLANETS[GLIESE876_PLANETS.length-1].distance+GLIESE876_PLANETS[GLIESE876_PLANETS.length-1].soi)*1.5;
+
 const BODY_CHILDREN = {};
 PLANETS.forEach(p=>{
   if(!BODY_CHILDREN[p.parent]) BODY_CHILDREN[p.parent]=[];
@@ -877,7 +920,8 @@ function findDominantBody(pos,t){
   if(dxSun*dxSun+dySun*dySun>SUN_BODY.soi*SUN_BODY.soi){
     const dxAC=pos.x-ALPHA_CEN_ANCHOR_POS.x, dyAC=pos.y-ALPHA_CEN_ANCHOR_POS.y;
     const dxTC=pos.x-TAU_CETI_POS.x, dyTC=pos.y-TAU_CETI_POS.y;
-    if(dxAC*dxAC+dyAC*dyAC>ALPHA_CEN_MAX_EXTENT*ALPHA_CEN_MAX_EXTENT && dxTC*dxTC+dyTC*dyTC>TAU_CETI_MAX_EXTENT*TAU_CETI_MAX_EXTENT) return null; //weird bugfix for tau ceti appear as deep space idk why but works.
+    const dxG876=pos.x-GLIESE876_POS.x, dyG876=pos.y-GLIESE876_POS.y;
+    if(dxAC*dxAC+dyAC*dyAC>ALPHA_CEN_MAX_EXTENT*ALPHA_CEN_MAX_EXTENT && dxTC*dxTC+dyTC*dyTC>TAU_CETI_MAX_EXTENT*TAU_CETI_MAX_EXTENT && dxG876*dxG876+dyG876*dyG876>GLIESE876_MAX_EXTENT*GLIESE876_MAX_EXTENT) return null; //weird bugfix for tau ceti appear as deep space idk why but works. (same fix extended to gliese 876)
   }
   let best=null;
   const stack=_domBodyStack; stack.length=0;
@@ -2669,15 +2713,16 @@ function setWarp(w){
 }
 function computeMaxAllowedWarp(){
   let cap=Infinity; //no cap frfr
-  ships.forEach(s=>{
-    if(s.status==='landed') return; // landed ships don't restrict warp
-    if(s.status!=='flying') return;
-    if(s._inAtmo){ cap=Math.min(cap,5); return; } // allow up to 5× warp inside atmospheres
-    const depth=bodyDepth(s._domBody); //cap based on planet moon or sun or interstellar or wtv
-    if(depth>=2) cap=Math.min(cap,100); //100x cap inside moon soi
-    else if(s._domBody===PROXIMA) cap=Math.min(cap,1000000);
-    else if(depth===1) cap=Math.min(cap,10000); //and 10kx for planet soi.
-  });
+  const sh=activeShip(); // warp cap only ever comes from the focused ship — background/simulated ships must never restrict or drop the player's warp
+  if(sh&&sh.status==='flying'){
+    if(sh._inAtmo){ cap=Math.min(cap,5); } // allow up to 5× warp inside atmospheres
+    else{
+      const depth=bodyDepth(sh._domBody); //cap based on planet moon or sun or interstellar or wtv
+      if(depth>=2) cap=Math.min(cap,100); //100x cap inside moon soi
+      else if(sh._domBody===PROXIMA) cap=Math.min(cap,1000000);
+      else if(depth===1) cap=Math.min(cap,10000); //and 10kx for planet soi.
+    }
+  }
   return cap;
 }
 function largestAllowedLevel(maxAllowed){
@@ -4975,15 +5020,16 @@ function loop(now){
     if(keys['arrowright']||keys['e']) sh.angle+=rotSpeed*realDt;
   }
 
-  // soi entry exit detection reset warp
-  ships.forEach(s=>{
-    if(s._prevDomBody===undefined) s._prevDomBody=s._domBody;
-    if(s.status==='flying'&&s._domBody!==s._prevDomBody){
-      if(bodyDepth(s._domBody)>=2){ if(warp!==0) setWarp(0); } // this pauses the game if moon
+  // soi entry exit detection reset warp — only the focused ship should ever trigger this. Background/simulated
+  // ships crossing an SOI boundary (even out in interstellar space) must never drop the player out of warp.
+  if(sh){
+    if(sh._prevDomBody===undefined) sh._prevDomBody=sh._domBody;
+    if(sh.status==='flying'&&sh._domBody!==sh._prevDomBody){
+      if(bodyDepth(sh._domBody)>=2){ if(warp!==0) setWarp(0); } // this pauses the game if moon
       else if(warp>1) setWarp(1);
     }
-    s._prevDomBody=s._domBody;
-  });
+    sh._prevDomBody=sh._domBody;
+  }
 
   // nav beacon auto drop timewarp before
   if(cheats.navBeacon&&navDeltaV&&navTargetPlanet&&sh&&sh.status==='flying'&&warp>1&&!navBurnWarpDropped){
