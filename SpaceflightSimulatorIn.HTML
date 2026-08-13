@@ -109,6 +109,9 @@
   .menu-social a:hover{border-color:var(--accent);color:var(--accent);}
   .menu-social a .ic{font-size:13px;}
   .menu-version{font-size:10px;color:#999;text-align:center;margin-top:2px;letter-spacing:.02em;}
+  .menu-settings-row{display:flex;align-items:center;justify-content:center;gap:var(--sp-4);flex-wrap:wrap;}
+  .menu-toggle-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--primary);cursor:pointer;user-select:none;}
+  .menu-toggle-row input[type=checkbox]{accent-color:var(--accent);cursor:pointer;}
 
   .float-panel{
     position:absolute;background:var(--panel-bg);border:1px solid var(--primary);
@@ -218,7 +221,6 @@
   .fuel-row .fuel-bar{position:absolute;left:0;top:0;bottom:0;background:var(--accent);}
   .fuel-row .fuel-pct{flex-shrink:0;width:30px;text-align:right;font-weight:700;color:var(--accent);}
 
-  /* Cheats panel — pushed below the fuel tanks panel */
   .float-cheats{
     top:calc(var(--sp-5) + 168px + 174px);right:var(--sp-5);width:192px;
   }
@@ -230,6 +232,15 @@
   .cheat-row label{cursor:pointer;user-select:none;}
   .cheat-tag{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
     color:#fff;background:var(--accent);padding:1px 4px;margin-left:4px;vertical-align:middle;}
+  body.cheats-disabled .float-cheats,body.cheats-disabled .float-buildcheats{display:none;}
+
+  /* DEV tool. Ultra cheat basically */
+  #devToolPanel{
+    position:fixed;bottom:var(--sp-5);left:var(--sp-5);width:250px;z-index:9999;
+    font-family:'Courier New',monospace;display:none;max-height:60vh;overflow-y:auto;
+  }
+  #devToolPanel .stat-line{font-size:10.5px;}
+  #devToolPanel .stat-line span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;}
 
   /* Planet nav context menu */
   #planetCtxMenu{display:none;width:200px;z-index:10;}
@@ -308,7 +319,6 @@
         <span class="vol-icon" id="volIcon">🔊</span>
         <input type="range" id="volSlider" min="0" max="100" value="35" step="1">
       </div>
-      <button class="mode-btn secondary" id="darkModeBtn">🌙 Dark Mode</button>
       <button class="mode-btn" id="toBuildBtn" style="display:none;">← Back to Build</button>
       <button class="mode-btn secondary" id="menuBtn">☰ Menu</button>
     </div>
@@ -321,12 +331,19 @@
           <div class="menu-logo">SPACEFLIGHT SIM</div>
           <div class="menu-sub">Made by CatPrinceHQ - Some modded features that made it into the main game are by KampfGuy.</div>
           <button class="menu-btn primary" id="menuPlayBtn">Play!</button>
+          <div class="menu-settings-row">
+            <button class="menu-btn secondary" id="darkModeBtn">🌙 Dark Mode</button>
+            <label class="menu-toggle-row" for="cheatsMasterToggle">
+              <input type="checkbox" id="cheatsMasterToggle">
+              <span>Enable Cheats</span>
+            </label>
+          </div>
           <div class="menu-social">
             <a href="https://youtube.com/@catprincehq" target="_blank" rel="noopener"><span class="ic">▶</span>Youtube</a>
             <a href="https://discord.gg/catprincehq" target="_blank" rel="noopener"><span class="ic">💬</span>Discord</a>
             <a href="https://www.tiktok.com/@catprince.hq?lang=en" target="_blank" rel="noopener"><span class="ic">♫</span>Tiktok</a>
           </div>
-          <div class="menu-version">SFSIHTML vR.1.3.1</div>
+          <div class="menu-version">SFSIHTML vR.1.3.2</div>
         </div>
       </div>
     </div>
@@ -488,6 +505,7 @@
     </div>
   </div>
 </div>
+<div class="float-panel" id="devToolPanel"><h3>Dev Tool <span class="cheat-tag">hidden</span></h3></div>
 <div id="toastMsg"></div>
 
 <script>
@@ -499,9 +517,34 @@ el('headerCollapseBtn').onclick=()=>{
   const collapsed=el('appHeader').classList.toggle('collapsed');
   el('headerCollapseBtn').textContent=collapsed?'▸ Expand':'▾ Collapse';
 };
+// Settings now persist. Long in the making lol
+const SETTINGS_KEY='sfs_settings_v1';
+function loadSettings(){
+  try{ const raw=localStorage.getItem(SETTINGS_KEY); return raw?JSON.parse(raw):{}; }catch(err){ return {}; }
+}
+let cheatsEnabled=false;
+function saveSettings(){
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({darkMode:document.body.classList.contains('dark-mode'), cheatsEnabled})); }catch(err){}
+}
+function applyCheatsVisibility(){
+  document.body.classList.toggle('cheats-disabled', !cheatsEnabled);
+}
+const _savedSettings=loadSettings();
+if(_savedSettings.darkMode) document.body.classList.add('dark-mode');
+el('darkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️ Light Mode':'🌙 Dark Mode';
+cheatsEnabled=!!_savedSettings.cheatsEnabled;
+el('cheatsMasterToggle').checked=cheatsEnabled;
+applyCheatsVisibility();
+
 el('darkModeBtn').onclick=()=>{
   const dark=document.body.classList.toggle('dark-mode');
   el('darkModeBtn').textContent=dark?'☀️ Light Mode':'🌙 Dark Mode';
+  saveSettings();
+};
+el('cheatsMasterToggle').onchange=e=>{
+  cheatsEnabled=e.target.checked;
+  applyCheatsVisibility();
+  saveSettings();
 };
 // Cached telemetry element refs so render() skips per-frame getElementById calls
 const hud = {
@@ -2732,7 +2775,11 @@ function computeMaxAllowedWarp(){
   let cap=Infinity; //no cap frfr
   const sh=activeShip(); // warp cap only ever comes from the focused ship — background/simulated ships must never restrict or drop the player's warp
   if(sh&&sh.status==='flying'){
-    if(sh._inAtmo){ cap=Math.min(cap,5); } // allow up to 5× warp inside atmospheres
+    if(sh._inAtmo){
+      // SPECIFICALLY because gliese d has a 1m unit atmosphere its literally hell
+      const atmoCap=(sh._domBody===BODIES_BY_KEY.gliese876D)?25:5;
+      cap=Math.min(cap,atmoCap);
+    }
     else{
       const depth=bodyDepth(sh._domBody); //cap based on planet moon or sun or interstellar or wtv
       if(depth>=2) cap=Math.min(cap,100); //100x cap inside moon soi
@@ -2774,19 +2821,24 @@ function applyCustomWarp(){
 el('customWarpBtn').onclick=applyCustomWarp;
 el('customWarpInput').addEventListener('keydown',e=>{ if(e.key==='Enter') applyCustomWarp(); });
 
+let _zoomBtnEls=null, _lastZoomInAtmo=undefined, _lastZoomCamFree=undefined, _lastZoomDomBody=undefined;
 function updateZoomButtons(){
   const sh=activeShip();
   const inAtmo=sh&&sh._inAtmo&&sh.status==='flying';
   // no freecam in atmosphere!!!!!
   if(inAtmo&&camFree){ setCamFree(false); return; } // setCamFree() re-invokes this once camFree is false
-  document.querySelectorAll('.zbtn').forEach(b=>{
+  const domBody=sh&&sh._domBody;
+  if(inAtmo===_lastZoomInAtmo&&camFree===_lastZoomCamFree&&domBody===_lastZoomDomBody) return;
+  _lastZoomInAtmo=inAtmo; _lastZoomCamFree=camFree; _lastZoomDomBody=domBody;
+  if(!_zoomBtnEls) _zoomBtnEls=Array.from(document.querySelectorAll('.zbtn'));
+  _zoomBtnEls.forEach(b=>{
     if(b.id==='camFreeBtn'){
       b.disabled=inAtmo;
       b.title=inAtmo?'Free camera unavailable inside an atmosphere':'Toggle free camera (F)';
       return;
     }
     const z=parseFloat(b.dataset.z);
-    const blocked=inAtmo&&!camFree&&z>atmoZoomMaxMpp(sh&&sh._domBody);
+    const blocked=inAtmo&&!camFree&&z>atmoZoomMaxMpp(domBody);
     b.disabled=blocked;
     b.title=blocked?'Not available inside atmosphere':'';
   });
@@ -3239,7 +3291,7 @@ flightCanvas.addEventListener('mousedown',e=>{
 
 // world screen coordinate conversion worldtoscreen rotates
 function worldToScreen(wx,wy){
-  const cw=flightCanvas.clientWidth, ch=flightCanvas.clientHeight;
+  const cw=_frameCW||flightCanvas.clientWidth, ch=_frameCH||flightCanvas.clientHeight;
   const dx=(wx-camera.x)/camera.metersPerPixel;
   const dy=-(wy-camera.y)/camera.metersPerPixel;
   const a=camera.angle;
@@ -4526,7 +4578,12 @@ function getAtmoDensity(pos,p){
 
 // culls overlapping bodies at extreme zoom-out, keeps the biggest
 const OVERLAP_CULL_PX = 3;
+// low timewarp lagfix by caching ez
+let _cullCacheKey=null, _cullCacheResult=null;
 function cullOverlappingBodies(){
+  const key=camera.x+','+camera.y+','+camera.angle+','+camera.metersPerPixel+','+Math.floor(simTime);
+  if(key===_cullCacheKey) return _cullCacheResult;
+  _cullCacheKey=key;
   const items=ALL_BODIES.map(b=>{
     const pos=planetPositionAt(b,simTime);
     const s=worldToScreen(pos.x,pos.y);
@@ -4544,6 +4601,7 @@ function cullOverlappingBodies(){
       else { keep.delete(a.b); break; }
     }
   }
+  _cullCacheResult=keep;
   return keep;
 }
 
@@ -4707,24 +4765,58 @@ function nightVisionTrack(tIn){
   const v=(ti(r(t)+r(t-12288)/3+r(t-24576)/6,0,16*st)+ti(rn()*(-t>>9&31)*'01'[1&t>>14],st,14*st)+ti((t*sn(t>>2)&184)*(-t>>8&31)*'1011'[3&t>>13]/128,3*st,13*st)+ti(mx(t>>7&t>>5&63,208*sn(sq(8*(t&[16383,[4095,8191][1&t>>15]][1&t>>14])))),4*st,11*st)/6+ti((sn(t/18|t/5^t/10)*(-t>>7&31)+12)*'0110'[3&t>>14]+.45*(63&t>>3*(3&t>>10)*2**([-5,-8,-6,-3][3&t>>15]/12))+r(t/2),6*st,9*st)-12)/1.5;
   return byteToSample(v);
 }
-function interstellarTrack(t){
-  let b,gT,k,len,gen,sqr,tri,echo,rise,fade,drop,pan,arp1,arp2,bass,lead,T,out,w,r;
+// interstellarTrack helpers are hoisted to module scope (instead of being
+// re-created as closures inside interstellarTrack on every single sample)
+// so the audio callback isn't constantly allocating functions/arrays -
+// that allocation churn was the source of the deep-space audio stutter.
+function ibSqr(x){ return (x&128)/4; }
+function ibTri(x){ return Math.abs((x&255)-128)/4; }
+function ibGen(t,gT,k,del,pitch,vibr,arp=0,k1=5,k2=5){
   const sin=Math.sin,abs=Math.abs,int=Math.floor;
-  t=44100*(b=t/44100),gT=110*.08*b,b*=1.1,len=224,k=b/len&1?5:4,b%=len,
-  gen=(del,pitch,vibr,arp=0,k1=5,k2=5)=>(t+vibr*sin(5*(T=gT-del)))*2**(pitch+('6202'[(T>>5)%4]-3)/12+(arp&&int((w=abs((T/arp&31)-17))/k2)-(0b0001010110001010>>w%k1*k&15)/12)),
-  sqr=x=>(x&128)/4,
-  tri=x=>abs((x&255)-128)/4,
-  echo=(fn,ch,vol,pan,delay,pitch,vibr,arp,k1,k2)=>(out=0,vol&&Array(5).fill().map((e,i)=>out+=(!i||ch==i%2||1-pan)*fn(gen(delay*i,pitch,vibr,arp,k1,k2))/(i+1)),vol*out),
-  rise=(start,len,x=1)=>b<start?0:b<start+len?(b-start)/len:x,
-  fade=(start,len)=>b<start?1:b<start+len?1-(b-start)/len:0,
-  drop=(tempo,hold)=>1-gT%tempo/hold,
-  pan=(ch,vol,pan=.5)=>vol*(abs((b+4*ch)%8/4-1)-pan)+1,
-  arp1=(ch,v)=>1.2*(echo(sqr,ch,rise(0,8,fade(32,32)),.6,2+rise(8,24,1.2),1,v,1)+echo(tri,ch,rise(32,16,fade(64,16)),1,3,1,2*v,1)+echo(sqr,ch,rise(64,8,fade(96,32)),.2,3,1,v,1,4)),
-  arp2=(ch,v)=>1.2*drop(2,4)*echo(sqr,ch,rise(112,32,fade(160,32)),.5,3,0,v,2,4,4)+1.5*drop(2,4+8*rise(176,16))*echo(tri,ch,rise(144,16,fade(192,32)),0,3,1,v,2),
-  bass=(ch,v)=>rise(12,20,fade(128,96))*(.7*sqr(gen(0,-1,v))+.2*sqr(gen(0,-2,v))),
-  lead=ch=>fade(192,32)*(.7*echo(sqr,ch,rise(24,32),.5,3,1,14,8)+echo(tri,ch,rise(80,16),.5,3,1,16,8,4,4));
-  const L=arp1(0,10)*pan(0,r=rise(0,32))+arp2(0,10)*pan(0,.8,.8)+bass(0,12)+lead(0)*pan(1,.8);
-  const R=arp1(1,-8)*pan(1,r)+arp2(1,-8)*pan(1,.8,.8)+bass(1,-10)+lead(1)*pan(0,.8);
+  const T=gT-del;
+  let extra=0;
+  if(arp){
+    const w=abs((T/arp&31)-17);
+    extra=int(w/k2)-(0b0001010110001010>>(w%k1*k)&15)/12;
+  }
+  return (t+vibr*sin(5*T))*2**(pitch+('6202'[(T>>5)%4]-3)/12+extra);
+}
+function ibEcho(t,gT,k,fn,ch,vol,pan,delay,pitch,vibr,arp,k1,k2){
+  if(!vol) return 0;
+  let out=0;
+  for(let i=0;i<5;i++){
+    const coef=(!i||ch==i%2)?1:(1-pan);
+    out+=coef*fn(ibGen(t,gT,k,delay*i,pitch,vibr,arp,k1,k2))/(i+1);
+  }
+  return vol*out;
+}
+function ibRise(b,start,len,x=1){ return b<start?0:b<start+len?(b-start)/len:x; }
+function ibFade(b,start,len){ return b<start?1:b<start+len?1-(b-start)/len:0; }
+function ibDrop(gT,tempo,hold){ return 1-gT%tempo/hold; }
+function ibPan(b,ch,vol,pan=.5){ return vol*(Math.abs((b+4*ch)%8/4-1)-pan)+1; }
+function ibArp1(t,gT,k,b,ch,v){
+  return 1.2*(ibEcho(t,gT,k,ibSqr,ch,ibRise(b,0,8,ibFade(b,32,32)),.6,2+ibRise(b,8,24,1.2),1,v,1)+ibEcho(t,gT,k,ibTri,ch,ibRise(b,32,16,ibFade(b,64,16)),1,3,1,2*v,1)+ibEcho(t,gT,k,ibSqr,ch,ibRise(b,64,8,ibFade(b,96,32)),.2,3,1,v,1,4));
+}
+function ibArp2(t,gT,k,b,ch,v){
+  return 1.2*ibDrop(gT,2,4)*ibEcho(t,gT,k,ibSqr,ch,ibRise(b,112,32,ibFade(b,160,32)),.5,3,0,v,2,4,4)+1.5*ibDrop(gT,2,4+8*ibRise(b,176,16))*ibEcho(t,gT,k,ibTri,ch,ibRise(b,144,16,ibFade(b,192,32)),0,3,1,v,2);
+}
+function ibBass(t,gT,k,b,ch,v){
+  return ibRise(b,12,20,ibFade(b,128,96))*(.7*ibSqr(ibGen(t,gT,k,0,-1,v))+.2*ibSqr(ibGen(t,gT,k,0,-2,v)));
+}
+function ibLead(t,gT,k,b,ch){
+  return ibFade(b,192,32)*(.7*ibEcho(t,gT,k,ibSqr,ch,ibRise(b,24,32),.5,3,1,14,8)+ibEcho(t,gT,k,ibTri,ch,ibRise(b,80,16),.5,3,1,16,8,4,4));
+}
+function interstellarTrack(tIn){
+  let b=tIn/44100;
+  const t=44100*b;
+  const gT=110*.08*b;
+  b*=1.1;
+  const len=224;
+  const k=b/len&1?5:4;
+  b%=len;
+  const r=ibRise(b,0,32);
+  const L=ibArp1(t,gT,k,b,0,10)*ibPan(b,0,r)+ibArp2(t,gT,k,b,0,10)*ibPan(b,0,.8,.8)+ibBass(t,gT,k,b,0,12)+ibLead(t,gT,k,b,0)*ibPan(b,1,.8);
+  const R=ibArp1(t,gT,k,b,1,-8)*ibPan(b,1,r)+ibArp2(t,gT,k,b,1,-8)*ibPan(b,1,.8,.8)+ibBass(t,gT,k,b,1,-10)+ibLead(t,gT,k,b,1)*ibPan(b,0,.8);
   return [byteToSample(L),byteToSample(R)];
 }
 // 36kHz mono bytebeat — "Wander Through The Sky" — played while inside the Tau Ceti system's SOI.
@@ -4772,7 +4864,14 @@ function buildTrack(tIn){
   const a=t/2*2**([-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-17,-15,-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-3,-15,-15,-17,-15,-12,-12,0,-12,-12,0,-12,-12,0,-12,-12,0,-12,-12,0,-12,-10,-10,2,-10,-10,2,-10,-10,2,-10,-10,2,-8,4,-10,0][s>>12&63]/12)%128+48+sin(t/8192*PI)*7&128;
   const r=t*sin(t>>3)*(s>>14&1)&~s>>7&127^1E5/(s&16383);
   const b=c=>c>0&&3*t/4*2**([9,9,9,9,,,7,,9,12,,9,9,,7,,9,9,9,9,,,7,,9,12,9,,7,9,9,,12,12,12,12,,,12,12,17,,16,16,16,,,,14,14,14,,7,7,7,,14,14,14,17,,16,17][c>>12&63]/12-sin(s/2048*PI)*3/c)%128+16&128;
-  return [byteToSample(a^r), byteToSample(b(s)+b(s-8192)/3^r)];
+  const bL=byteToSample(a^r), bR=byteToSample(b(s)+b(s-8192)/3^r);
+  return [bL*0.65+bR*0.35, bR*0.65+bL*0.35];
+}
+function signalTrack(tIn){
+  let t,b,Db,D,EE,Gb,A,B,u,S,P,i,m,n;
+  const sin=Math.sin;
+  t=5644800-1-(tIn%5644800);
+  return byteToSample((t/=44100,b=1.75*t%224,Db=277,D=294,EE=330,Gb=370,A=440,B=494,u=b&16?2:1,S=(p,e=0,k=22)=>(i=b-e,p*u*t*[A/2,Db,Gb,Gb,A,2*Db,Gb,B,2*D,Gb,B,2*Gb,A/2,Db,Gb,Gb,A,2*Db,Gb,B,2*D,A,2*EE,2*A][(i>>1)%8*3+(k*i|0)%3]%2<<4),P=(p,e=0)=>20*(.7*(p*u*(t+3E-4*sin(44*t))*[Gb/2,Db,D,Gb,Gb/2,Db,D,A][(b-e>>1)%8]%2)|0),m=64>b,n=160>b,48+((16<b&&m||80<b&&n)&&(1E4*sin((128*t*'10001010'[(8*b|0)%8])**2)&255)/13)+((32<b&&m||128<b&&n)&&56*(b*(256>>32*b)%2|0))+(n&&38*((t*[Db,D,Db,B/2,Db,D,EE,Gb,Db,D,Db,B/2,Db,Gb,A,415][(2*b|0)%16]>>1)%2|0))+(!m&&P(1)+P(2,1)+.8*P(3))+((m||96<b&&n)&&S(2)+.7*S(2,.4)+S(2,1)/2)+(!n&&1.7*S(2,0,4)+S(4,.3,4))));
 }
 `;
 const FADE_SECONDS = 1.6;
@@ -4784,14 +4883,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
   }
   constructor(){
     super();
-    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0}; 
-    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0}; 
-    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfBuild=0; 
+    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
+    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfBuild=0; this.tfSignal=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
-        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0}; 
+        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
         this.targetGains[d.value]=1;
       }
     };
@@ -4801,14 +4900,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rBuild=56000/sampleRate;
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rBuild=56000/sampleRate, rSignal=44100/sampleRate;
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
         if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
         else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
       }
-      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; this.tfBuild+=rBuild; 
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; this.tfBuild+=rBuild; this.tfSignal+=rSignal; 
       let l=0,r=0;
       if(this.gains.atmo>0.0005){
         const s=atmoTrack(Math.floor(this.tfAtmo));
@@ -4837,6 +4936,10 @@ class BytebeatProcessor extends AudioWorkletProcessor {
       if(this.gains.build>0.0005){
         const s=buildTrack(Math.floor(this.tfBuild));
         l+=s[0]*this.gains.build; r+=s[1]*this.gains.build;
+      }
+      if(this.gains.signal>0.0005){
+        const s=signalTrack(Math.floor(this.tfSignal))*this.gains.signal;
+        l+=s; r+=s;
       }
       L[i]=Math.max(-1,Math.min(1,l*v));
       R[i]=Math.max(-1,Math.min(1,r*v));
@@ -4867,13 +4970,14 @@ function currentMusicState(){
   if(sh&&sh.status==='flying'){
     if(sh._domBody===ALPHA_CEN_A||sh._domBody===ALPHA_CEN_B||sh._domBody===PROXIMA) return 'nightVision';
     if(sh._domBody===TAU_CETI||TAU_CETI_PLANETS.includes(sh._domBody)) return sh._inAtmo?'atmo':'tauCeti';
+    if(sh._domBody===GLIESE876||GLIESE876_PLANETS.includes(sh._domBody)) return sh._inAtmo?'atmo':'signal';
     if(sh._domBody&&sh._domBody!==SUN_BODY) return sh._inAtmo?'atmo':'soi';
     if(sh._domBody===SUN_BODY) return 'interplanetary';
     return 'interstellar';
   }
   return 'interplanetary';
 }
-const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',build:'Assembly Line'};
+const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',build:'Assembly Line',signal:'Signal of Distress'};
 function updateMusicState(){
   if(!musicNode&&!musicFallbackState) return;
   const st=currentMusicState();
@@ -4884,7 +4988,7 @@ function updateMusicState(){
       musicNode.port.postMessage({type:'state',value:st});
     }else if(musicFallbackState){
       const tg=musicFallbackState.targetGains;
-      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.build=0;
+      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.build=0; tg.signal=0;
       tg[st]=1;
     }
   }
@@ -4918,19 +5022,19 @@ function startMusicEngineFallback(){
     musicCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(!musicFallbackFns){
       musicFallbackFns=new Function(BYTEBEAT_TRACKS_SRC+
-        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack};')();
+        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack};')();
     }
-    const {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack}=musicFallbackFns;
+    const {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack}=musicFallbackFns;
     const sr=musicCtx.sampleRate;
     const st={
-      gains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0},
-      targetGains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0},
-      tfAtmo:0,tfInter:0,tfSoi:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfBuild:0,
+      gains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
+      targetGains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
+      tfAtmo:0,tfInter:0,tfSoi:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfBuild:0,tfSignal:0,
       fadeStep:1/(FADE_SECONDS*sr),
       vol:musicVolume,
     };
     musicFallbackState=st;
-    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rBuild=8000/sr;
+    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rBuild=56000/sr, rSignal=44100/sr;
     // ScriptProcessorNode runs on the main thread (unlike AudioWorkletNode, our primary path above,
     // which has its own realtime thread), so it competes with physics/render for CPU time. A bigger
     // buffer only delays underruns, it can't prevent them - when the main thread does stall long enough,
@@ -4954,7 +5058,7 @@ function startMusicEngineFallback(){
           if(st.gains[k]<st.targetGains[k]) st.gains[k]=Math.min(st.targetGains[k],st.gains[k]+st.fadeStep);
           else if(st.gains[k]>st.targetGains[k]) st.gains[k]=Math.max(st.targetGains[k],st.gains[k]-st.fadeStep);
         }
-        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti; st.tfBuild+=rBuild;
+        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti; st.tfBuild+=rBuild; st.tfSignal+=rSignal;
         let l=0,r=0;
         if(st.gains.atmo>0.0005){
           const s=atmoTrack(Math.floor(st.tfAtmo));
@@ -4983,6 +5087,10 @@ function startMusicEngineFallback(){
         if(st.gains.build>0.0005){
           const s=buildTrack(Math.floor(st.tfBuild));
           l+=s[0]*st.gains.build; r+=s[1]*st.gains.build;
+        }
+        if(st.gains.signal>0.0005){
+          const s=signalTrack(Math.floor(st.tfSignal))*st.gains.signal;
+          l+=s; r+=s;
         }
         L[i]=Math.max(-1,Math.min(1,l*st.vol*declick));
         R[i]=Math.max(-1,Math.min(1,r*st.vol*declick));
@@ -5026,9 +5134,26 @@ if(volSliderEl){
 }
 
 function loop(now){
+  try{
+    loopInner(now);
+  }catch(err){
+// fucking NaNs piss me off
+    console.error('[loop] uncaught error, frame skipped:',err);
+    try{
+      showToast('A frame errored and was skipped: '+(err&&err.message?err.message:err));
+    }catch(e2){ /* toast itself failed, cooked??? */ }
+  }
+  requestAnimationFrame(loop);
+}
+function loopInner(now){
   updateMusicState();
   const realDt=Math.min(0.05,(now-lastT)/1000);
   lastT=now;
+  // dev
+  if(devToolVisible){
+    devMsPerFrame=realDt*1000;
+    devFpsSmoothed=devFpsSmoothed?devFpsSmoothed*0.9+(realDt>0?0.1/realDt:0):(realDt>0?1/realDt:0);
+  }
 
   const sh=activeShip();
   if(sh&&sh.status==='flying'&&warp<=MAX_CONTROL_WARP){
@@ -5073,6 +5198,10 @@ function loop(now){
   ships.forEach(s=>{
     if(s.status==='flying'){
       stepSimSeconds(s,simSeconds,tStart); pushTrail(s);
+      // timewarp 100mx = 100mx mouse pull cheat speed.. hmmm im going to put 1e+150 timewarp LOL ok mousepull... Guess what, it's fucking NaN again! so this fixes that.
+      if(s.status==='flying'&&(!isFinite(s.pos.x)||!isFinite(s.pos.y)||!isFinite(s.vel.x)||!isFinite(s.vel.y))){
+        destroyShip(s,s.name+'\u2019s trajectory went out of bounds (numeric overflow) and was reset.');
+      }
     } else if(s.status==='landed'&&s.landedOnPlanet&&s.landedRelPos){
       // Wheel driving — rotate the landed position around the planet
       if(s===activeShip()&&(keys['a']||keys['d'])&&s.parts.some(pp=>PARTS[pp.id].type==='wheel')){
@@ -5185,7 +5314,6 @@ function loop(now){
     if(shipListDirty){ renderShipList(); shipListDirty=false; }
     renderFuelList();
   }
-  requestAnimationFrame(loop);
 }
 window.addEventListener('resize',()=>{ drawGrid(); positionShipList(); });
 
@@ -5204,6 +5332,81 @@ if(loadShips()&&ships.length){
   pendingRestoredFlight=true;
   el('menuPlayBtn').textContent='Continue';
 }
+
+// ============================================================
+// DEV TOOL — hidden perf profiler, unlocked by a secret key combo
+// ============================================================
+let devToolVisible=false, devMsPerFrame=0, devFpsSmoothed=0, devToolInterval=null;
+const PROFILE_TARGETS=['render','drawGrid','stepSimSeconds','handleShipCollisions',
+  'computeNavBeaconPath','renderShipList','renderStagingList','renderFuelList',
+  'pushTrail','chargeIonStorage','runFuelCompressors','updateZoomButtons','updateMusicState'];
+const profileStats={};
+PROFILE_TARGETS.forEach(name=>{ profileStats[name]={total:0,calls:0}; });
+function makeProfiled(name,fn){
+  const st=profileStats[name];
+  return function(...args){
+    if(!devToolVisible) return fn.apply(this,args);
+    const t0=performance.now();
+    const r=fn.apply(this,args);
+    st.total+=performance.now()-t0; st.calls++;
+    return r;
+  };
+}
+render=makeProfiled('render',render);
+drawGrid=makeProfiled('drawGrid',drawGrid);
+stepSimSeconds=makeProfiled('stepSimSeconds',stepSimSeconds);
+handleShipCollisions=makeProfiled('handleShipCollisions',handleShipCollisions);
+computeNavBeaconPath=makeProfiled('computeNavBeaconPath',computeNavBeaconPath);
+renderShipList=makeProfiled('renderShipList',renderShipList);
+renderStagingList=makeProfiled('renderStagingList',renderStagingList);
+renderFuelList=makeProfiled('renderFuelList',renderFuelList);
+pushTrail=makeProfiled('pushTrail',pushTrail);
+chargeIonStorage=makeProfiled('chargeIonStorage',chargeIonStorage);
+runFuelCompressors=makeProfiled('runFuelCompressors',runFuelCompressors);
+updateZoomButtons=makeProfiled('updateZoomButtons',updateZoomButtons);
+updateMusicState=makeProfiled('updateMusicState',updateMusicState);
+
+function updateDevToolPanel(){
+  const entries=Object.keys(profileStats).map(name=>({name,total:profileStats[name].total,calls:profileStats[name].calls}));
+  entries.sort((x,y)=>y.total-x.total);
+  const top5=entries.slice(0,5);
+  let memLine='';
+  if(performance.memory){
+    memLine='<div class="stat-line"><span>JS Heap</span><b>'+(performance.memory.usedJSHeapSize/1048576).toFixed(1)+' MB</b></div>';
+  }
+  el('devToolPanel').innerHTML=
+    '<h3>Dev Tool <span class="cheat-tag">hidden</span></h3>'
+    +'<div class="stat-line"><span>FPS</span><b>'+devFpsSmoothed.toFixed(1)+'</b></div>'
+    +'<div class="stat-line"><span>Frame time</span><b>'+devMsPerFrame.toFixed(2)+' ms</b></div>'
+    +memLine
+    +'<div class="stat-line" style="margin-top:6px;color:#888;"><span>Top fns (ms / 2s window)</span></div>'
+    +top5.map(e=>'<div class="stat-line"><span>'+e.name+'</span><b>'+e.total.toFixed(1)+'ms ('+e.calls+'\u00d7)</b></div>').join('');
+  entries.forEach(e=>{ profileStats[e.name].total=0; profileStats[e.name].calls=0; });
+}
+function toggleDevTool(){
+  devToolVisible=!devToolVisible;
+  el('devToolPanel').style.display=devToolVisible?'block':'none';
+  if(devToolVisible){
+    updateDevToolPanel();
+    devToolInterval=setInterval(updateDevToolPanel,2000);
+  } else if(devToolInterval){
+    clearInterval(devToolInterval); devToolInterval=null;
+  }
+}
+// stop snooping boy
+const DEV_COMBO=atob('Y2F0cHJpbmNlaHE=').split('');
+let devComboProgress=0;
+window.addEventListener('keydown',e=>{
+  const tag=document.activeElement&&document.activeElement.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+  const k=e.key.toLowerCase();
+  if(k===DEV_COMBO[devComboProgress]){
+    devComboProgress++;
+    if(devComboProgress===DEV_COMBO.length){ devComboProgress=0; toggleDevTool(); }
+  } else {
+    devComboProgress=(k===DEV_COMBO[0])?1:0;
+  }
+});
 
 requestAnimationFrame(loop);
 
