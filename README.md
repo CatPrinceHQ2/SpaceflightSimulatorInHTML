@@ -8,6 +8,8 @@ No building or dependencies. Just open the HTML in Google or whatever.
 
 **~5,450 lines of vanilla HTML/CSS/JS in one file.** Canvas 2D rendering, a hand-rolled orbital mechanics engine, and a procedural bytebeat music system, all self-contained without need for internet. This allows bypassing of work or schooling internet blocks by creating a website in the browser with no actual website. It is all stored locally. And it's very compact, less than one megabyte.
 
+Type 'unlockcheats' if you can't wait 10 minutes for it.
+
 ## What it does
 
 Spaceflight Sim has two screens:
