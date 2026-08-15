@@ -80,7 +80,7 @@
   .menu-wrap{display:flex;gap:28px;flex-wrap:wrap;justify-content:center;padding:24px;}
   .menu-card{
     background:rgba(250,250,250,0.95);border:1px solid #1A1A1A;
-    padding:28px 32px;min-width:280px;max-width:360px;
+    padding:28px 32px;min-width:280px;max-width:390px;
     display:flex;flex-direction:column;gap:12px;
   }
   body.dark-mode .menu-card{background:rgba(22,22,26,0.96);border-color:#EDEDED;}
@@ -98,20 +98,50 @@
   .menu-btn.primary{background:var(--primary);color:var(--bg);}
   .menu-btn.primary:hover{background:var(--accent);border-color:var(--accent);color:#fff;}
   .menu-foot{font-size:11px;color:#888;text-align:center;margin-top:6px;}
-  .menu-social{display:flex;gap:8px;justify-content:center;margin-top:2px;}
+  .menu-social{display:flex;gap:5px;justify-content:center;margin-top:2px;}
   .menu-social a{
-    flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+    flex:1;display:flex;align-items:center;justify-content:center;gap:4px;
     background:var(--bg);border:1px solid var(--primary);color:var(--primary);
-    font-family:var(--font-body);font-weight:700;font-size:11px;
-    padding:8px 6px;text-decoration:none;cursor:pointer;border-radius:0;
-    letter-spacing:.02em;transition:border-color .15s ease,color .15s ease;
+    font-family:var(--font-body);font-weight:700;font-size:10px;
+    padding:8px 3px;text-decoration:none;cursor:pointer;border-radius:0;
+    letter-spacing:.01em;transition:border-color .15s ease,color .15s ease;
   }
   .menu-social a:hover{border-color:var(--accent);color:var(--accent);}
-  .menu-social a .ic{font-size:13px;}
+  .menu-social a .ic{font-size:12px;}
   .menu-version{font-size:10px;color:#999;text-align:center;margin-top:2px;letter-spacing:.02em;}
   .menu-settings-row{display:flex;align-items:center;justify-content:center;gap:var(--sp-4);flex-wrap:wrap;}
   .menu-toggle-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--primary);cursor:pointer;user-select:none;}
   .menu-toggle-row input[type=checkbox]{accent-color:var(--accent);cursor:pointer;}
+
+  .menu-proc-row{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1px solid var(--primary);}
+  .menu-proc-row .menu-proc-labels{display:flex;flex-direction:column;line-height:1.25;}
+  .menu-proc-row .menu-proc-title{font-size:12px;font-weight:700;color:var(--primary);}
+  .menu-proc-row .menu-proc-sub{font-size:10px;color:#888;}
+  .menu-proc-switch{position:relative;width:38px;height:20px;flex:none;margin-left:auto;}
+  .menu-proc-switch input{opacity:0;width:0;height:0;position:absolute;}
+  .menu-proc-switch .slider{position:absolute;inset:0;background:#999;cursor:pointer;transition:background .15s ease;}
+  .menu-proc-switch .slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#fff;transition:transform .15s ease;}
+  .menu-proc-switch input:checked + .slider{background:var(--accent);}
+  .menu-proc-switch input:checked + .slider::before{transform:translateX(18px);}
+  #procSeedRow{display:none;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;}
+  #procSpawnRow{display:none;}
+  #procSeedRow input[type=number]{
+    width:110px;background:var(--bg);border:1px solid var(--primary);color:var(--primary);
+    font-family:var(--font-body);font-size:12px;padding:6px 8px;
+  }
+  .menu-proc-minibtn{
+    background:var(--bg);border:1px solid var(--primary);color:var(--primary);
+    font-family:var(--font-body);font-weight:700;font-size:11px;
+    padding:6px 8px;cursor:pointer;border-radius:0;
+  }
+  .menu-proc-minibtn:hover{border-color:var(--accent);color:var(--accent);}
+  #procSeedNote{font-size:10px;color:#888;text-align:center;}
+  #procLimitRow{display:none;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;}
+  .menu-proc-limit-label{font-size:11px;color:var(--primary);}
+  #procLimitRow input[type=number]{
+    width:90px;background:var(--bg);border:1px solid var(--primary);color:var(--primary);
+    font-family:var(--font-body);font-size:12px;padding:6px 8px;
+  }
 
   .float-panel{
     position:absolute;background:var(--panel-bg);border:1px solid var(--primary);
@@ -342,8 +372,38 @@
             <a href="https://youtube.com/@catprincehq" target="_blank" rel="noopener"><span class="ic">▶</span>Youtube</a>
             <a href="https://discord.gg/catprincehq" target="_blank" rel="noopener"><span class="ic">💬</span>Discord</a>
             <a href="https://www.tiktok.com/@catprince.hq?lang=en" target="_blank" rel="noopener"><span class="ic">♫</span>Tiktok</a>
+            <a href="https://github.com/CatPrinceHQ2/SpaceflightSimulatorInHTML" target="_blank" rel="noopener"><span class="ic">🐙</span>Github</a>
           </div>
-          <div class="menu-version">SFSIHTML vR1.4.2</div>
+          <label class="menu-proc-row" for="procPlanetsToggle" id="procPlanetsRow">
+            <span class="menu-proc-labels">
+              <span class="menu-proc-title">Procedural Planets</span>
+              <span class="menu-proc-sub" id="procPlanetsSub">Off - Real life systems only</span>
+            </span>
+            <span class="menu-proc-switch">
+              <input type="checkbox" id="procPlanetsToggle" autocomplete="off">
+              <span class="slider"></span>
+            </span>
+          </label>
+          <div id="procSeedRow">
+            <input type="number" id="procSeedInput" min="1" max="1000000" step="1" placeholder="Seed 1 to 1M." autocomplete="off">
+            <button type="button" class="menu-proc-minibtn" id="procSeedRandomBtn">Random seed if ur lazy</button>
+          </div>
+          <div id="procLimitRow">
+            <span class="menu-proc-limit-label">System Count Limit</span>
+            <input type="number" id="procLimitInput" min="1" step="1" placeholder="75" autocomplete="off">
+          </div>
+          <label class="menu-proc-row" for="procSpawnAtSeedToggle" id="procSpawnRow">
+            <span class="menu-proc-labels">
+              <span class="menu-proc-title">Spawn Location</span>
+              <span class="menu-proc-sub" id="procSpawnSub">Adds the seed's system to the galaxy and spawns you on a earthlike planet</span>
+            </span>
+            <span class="menu-proc-switch">
+              <input type="checkbox" id="procSpawnAtSeedToggle" checked autocomplete="off">
+              <span class="slider"></span>
+            </span>
+          </label>
+          <div id="procSeedNote" style="display:none;"></div>
+          <div class="menu-version">SFSIHTML vR1.5.0</div>
         </div>
       </div>
     </div>
@@ -355,11 +415,11 @@
 
       <div class="float-panel float-stats" id="statsPanel">
         <h3>Rocket stats</h3>
-        <div class="stat-line"><span>Dry mass</span><b id="s-dry">—</b></div>
-        <div class="stat-line"><span>Fuel mass</span><b id="s-fuel">—</b></div>
-        <div class="stat-line"><span>Total thrust</span><b id="s-thrust">—</b></div>
-        <div class="stat-line"><span>Thrust/weight</span><b id="s-twr">—</b></div>
-        <div class="stat-line"><span>Est. Δv</span><b id="s-dv">—</b></div>
+        <div class="stat-line"><span>Dry mass</span><b id="s-dry">-</b></div>
+        <div class="stat-line"><span>Fuel mass</span><b id="s-fuel">-</b></div>
+        <div class="stat-line"><span>Total thrust</span><b id="s-thrust">-</b></div>
+        <div class="stat-line"><span>Thrust/weight</span><b id="s-twr">-</b></div>
+        <div class="stat-line"><span>Est. Δv</span><b id="s-dv">-</b></div>
         <div class="warn-text" id="s-warn"></div>
       </div>
 
@@ -402,9 +462,9 @@
       <div class="float-panel float-hud" id="hud">
         <h3>Telemetry</h3>
         <div class="hline"><span>Speed</span><b id="h-speed">0.0 u/s</b></div>
-        <div class="hline"><span id="h-altLabel">Alt (Earth)</span><b id="h-alt">—</b></div>
-        <div class="hline"><span>Dist. Sun</span><b id="h-altS">—</b></div>
-        <div class="hline"><span>Sphere of influence</span><b id="h-soi">—</b></div>
+        <div class="hline"><span id="h-altLabel">Alt (Earth)</span><b id="h-alt">-</b></div>
+        <div class="hline"><span>Dist. Sun</span><b id="h-altS">-</b></div>
+        <div class="hline"><span>Sphere of influence</span><b id="h-soi">-</b></div>
         <div class="hline"><span>Fuel</span><b id="h-fuel">100%</b></div>
         <div class="hline"><span>Throttle</span><b id="h-throttle">100%</b></div>
         <div class="hline"><span>Warp</span><b id="h-warp">1×</b></div>
@@ -469,7 +529,7 @@
         <div class="cheat-row" style="flex-direction:column;align-items:stretch;gap:4px;">
           <label for="cheatTeleport">Teleport to planet</label>
           <select id="cheatTeleport" style="width:100%;background:var(--bg);color:var(--primary);border:1px solid var(--primary);font-size:11px;padding:4px;">
-            <option value="">— select —</option>
+            <option value="">- select -</option>
           </select>
         </div>
       </div>
@@ -530,7 +590,7 @@ let cheatsEnabled=false;
 let totalPlaySeconds=0;
 let devUnlocked=false;
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({darkMode:document.body.classList.contains('dark-mode'), cheatsEnabled, totalPlaySeconds, devUnlocked})); }catch(err){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({darkMode:document.body.classList.contains('dark-mode'), cheatsEnabled, totalPlaySeconds, devUnlocked, procSystemLimit:PROC_MAX_SYSTEMS})); }catch(err){}
 }
 function applyCheatsVisibility(){
   document.body.classList.toggle('cheats-disabled', !cheatsEnabled);
@@ -617,6 +677,7 @@ function atmoThickness(p){ return p?p.radius*(p.atmoFrac||0):ATMO_ZOOM_REF_THICK
 function atmoZoomEnterMpp(p){ return Math.max(5,atmoThickness(p)/ATMO_ZOOM_REF_THICKNESS*ATMO_ZOOM_ENTER_MPP_REF); }
 function atmoZoomMaxMpp(p){ return Math.max(8,atmoThickness(p)/ATMO_ZOOM_REF_THICKNESS*ATMO_ZOOM_MAX_MPP_REF); }
 const MOUSE_PULL_ACCEL = 1500;   // acceleration from the mouse-pull cheat (u/s²)
+const STAR_GLOW_ATMO_FRAC = 1.4; // how fat every star's glow is yuhh
 // Launch pad height above surface — shared by launch() and drawLaunchPad() so they can't drift apart
 const LAUNCH_PAD_HEIGHT = 8;
 
@@ -703,6 +764,11 @@ function registerPlanet(body){ registerBody(body); PLANETS.push(body); return bo
 function eccFromMod(mod){
   return Math.min(0.995,Math.max(0,1-(mod===undefined?1:mod)));
 }
+function hashAngle(str){
+  let h=0;
+  for(let i=0;i<str.length;i++){ h=(h*31+str.charCodeAt(i))|0; }
+  return ((h>>>0)/4294967296)*Math.PI*2;
+}
 function solveKepler(M,e){
   let E=M;
   for(let i=0;i<8;i++){
@@ -735,9 +801,11 @@ function deriveOrbitingBody(def, parent, index, total, tuning){
   const initialAngle = tuning.angleSeed!==undefined ? tuning.angleSeed : (index/total)*Math.PI*2;
   const soi = hillSOI(radius,GMbase,distance,parent.GM,tuning);
   const ecc = eccFromMod(def.eccMod);
-  const body = Object.assign({},def,{parent:def.parent||parent.key,radius,distance,GM,GMbase,omega,initialAngle,soi,ecc});
+  const periArg = def.periArg!==undefined ? def.periArg : hashAngle(def.key||(parent.key+'_'+index));
+  const body = Object.assign({},def,{parent:def.parent||parent.key,radius,distance,GM,GMbase,omega,initialAngle,soi,ecc,periArg});
   if(tuning.musicTheme!==undefined && body.musicTheme===undefined) body.musicTheme=tuning.musicTheme;
   if(tuning.musicUsesAtmo!==undefined && body.musicUsesAtmo===undefined) body.musicUsesAtmo=tuning.musicUsesAtmo;
+  if(tuning.musicSemitone!==undefined && body.musicSemitone===undefined) body.musicSemitone=tuning.musicSemitone;
   return registerPlanet(body);
 }
 // Planets
@@ -750,7 +818,7 @@ function buildMoons(defs, tuning){
     Object.assign({},tuning,{angleSeed:(moonAngleSeed++%7)/7*Math.PI*2})));
 }
 
-const SUN_BODY = registerStar({key:'sun',name:'Sun',parent:null,radius:SUN_RADIUS,color:'#ffb020',GM:GM_SUN,GMbase:GM_SUN,solid:false,atmo:false});
+const SUN_BODY = registerStar({key:'sun',name:'Sun',parent:null,radius:SUN_RADIUS,color:'#ffb020',GM:GM_SUN,GMbase:GM_SUN,solid:false,atmo:true,atmoFrac:STAR_GLOW_ATMO_FRAC}); // fat glow so stars are starry 
 const TOP_LEVEL_PLANETS = buildPlanets(PLANET_DEFS, SUN_BODY, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:3, soiExtraMult:1});
 const MOONS = buildMoons(MOON_DEFS, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:3, soiExtraMult:2.5, musicTheme:'moonEurofunk'}); //2.5 extra moon-only SOI boost since moon SOIs were too tight to fly in otherwise. moonEurofunk theme plays through every moon SOI
 const MOON_KEY_SET = new Set(MOONS.map(m=>m.key)); // ignore moon asteroid
@@ -761,6 +829,7 @@ SUN_BODY.soi = 3.5*BODIES_BY_KEY['pluto'].distance;
 // fix
 const STAR_SYSTEMS = [];
 function registerStarSystem(sys){ STAR_SYSTEMS.push(sys); return sys; }
+registerStarSystem({anchorPos:SUN_POS, maxExtent:SUN_BODY.soi*1.5});
 
 const ALPHA_CEN_SYSTEM_DIST_AU = 1110;
 const ALPHA_CEN_SYSTEM_Y_AU = 254;
@@ -788,7 +857,7 @@ const ALPHA_CEN_A = registerStar({
   color:'#fff3d6', groundColor:null,
   radius:SUN_RADIUS*2.44,
   GM:GM_ALPHA_CEN_A, GMbase:GM_ALPHA_CEN_A,
-  solid:false, atmo:false, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri',
+  solid:false, atmo:true, atmoFrac:STAR_GLOW_ATMO_FRAC, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri',
   distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
   soi:251674503417.04407,
 });
@@ -798,7 +867,7 @@ const ALPHA_CEN_B = registerStar({
   color:'#ffb347', groundColor:null,
   radius:SUN_RADIUS*1.72,
   GM:GM_ALPHA_CEN_B, GMbase:GM_ALPHA_CEN_B,
-  solid:false, atmo:false, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri',
+  solid:false, atmo:true, atmoFrac:STAR_GLOW_ATMO_FRAC, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri',
   distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
   soi:221300445550.4541,
 });
@@ -817,7 +886,7 @@ const PROXIMA = registerStar({
   color:'#c0392b', groundColor:null,
   radius:PROXIMA_RADIUS,
   GM:GM_PROXIMA, GMbase:GM_PROXIMA,
-  solid:false, atmo:false, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri', warpCapOverride:1000000,
+  solid:false, atmo:true, atmoFrac:STAR_GLOW_ATMO_FRAC, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri', warpCapOverride:1000000,
   distance:PROXIMA_DISTANCE, ecc:PROXIMA_ECC, omega:PROXIMA_OMEGA, initialAngle:Math.PI*0.5,
   soi:PROXIMA_SOI,
 });
@@ -843,7 +912,7 @@ const TAU_CETI = registerStar({
   color:'#ffd27f', groundColor:null,
   radius:SUN_RADIUS*0.79,
   GM:GM_TAU_CETI, GMbase:GM_TAU_CETI,
-  solid:false, atmo:false, musicTheme:'tauCeti', musicUsesAtmo:true,
+  solid:false, atmo:true, atmoFrac:STAR_GLOW_ATMO_FRAC, musicTheme:'tauCeti', musicUsesAtmo:true,
 });
 
 TAU_CETI.soi = 7*TAU_CETI_PLANET_DEFS[TAU_CETI_PLANET_DEFS.length-1].distAU*AU;
@@ -866,7 +935,7 @@ const GLIESE876 = registerStar({
   color:'#e8623f', groundColor:null,
   radius:SUN_RADIUS*0.54,
   GM:GM_GLIESE876, GMbase:GM_GLIESE876,
-  solid:false, atmo:false, musicTheme:'signal', musicUsesAtmo:true,
+  solid:false, atmo:true, atmoFrac:STAR_GLOW_ATMO_FRAC, musicTheme:'signal', musicUsesAtmo:true,
 });
 
 GLIESE876.soi = 12.5*GLIESE876_PLANET_DEFS[GLIESE876_PLANET_DEFS.length-1].distAU*AU;
@@ -893,6 +962,11 @@ const SAGITTARIUS_A = registerStar({
 });
 SAGITTARIUS_A.soi = SGR_A_DIST_AU*AU*0.0175;
 registerStarSystem({anchorPos:SGR_A_POS, maxExtent:SAGITTARIUS_A.soi*1.5});
+
+// All procedurals become part of galaxy yay
+const PROC_REGION_CENTER = SGR_A_POS;
+const PROC_REGION_MAX_RADIUS = (SGR_A_DIST_AU*AU) * 1.25;
+const PROC_REGION_MIN_RADIUS = SAGITTARIUS_A.soi*3;
 
 const BODY_CHILDREN = {};
 PLANETS.forEach(p=>{
@@ -927,15 +1001,16 @@ function bodyDepth(b){ // warp cap based on soi type if planet or moon or sun or
 function planetOrbitState(p,t){
   if(p._oscT===t) return p._oscVal;
   const e=p.ecc;
+  const pa=p.periArg||0;
   const M=p.initialAngle+p.omega*t;
   let result;
   if(e<=0.0001){
-    result={r:p.distance, theta:M, drdt:0, dthetadt:p.omega};
+    result={r:p.distance, theta:M+pa, drdt:0, dthetadt:p.omega};
   } else {
     const E=solveKepler(M,e);
     const cosE=Math.cos(E), sinE=Math.sin(E);
     const r=p.distance*(1-e*cosE);
-    const theta=2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2),Math.sqrt(1-e)*Math.cos(E/2));
+    const theta=2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2),Math.sqrt(1-e)*Math.cos(E/2))+pa;
     const dEdt=p.omega/(1-e*cosE);
     const drdt=p.distance*e*sinE*dEdt;
     const dthetadt=Math.sqrt(1-e*e)*p.omega/((1-e*cosE)*(1-e*cosE));
@@ -1024,6 +1099,7 @@ function findDominantBody(pos,t){
   if(dxSun*dxSun+dySun*dySun>SUN_BODY.soi*SUN_BODY.soi){
     // Generic.
     const inAnySystem=STAR_SYSTEMS.some(sys=>{
+      if(sys.procSeed!=null&&!proceduralMode) return false; // fix hidden proc seeds from soi'ing u
       const dx=pos.x-sys.anchorPos.x, dy=pos.y-sys.anchorPos.y;
       return dx*dx+dy*dy<=sys.maxExtent*sys.maxExtent;
     });
@@ -1031,7 +1107,7 @@ function findDominantBody(pos,t){
   }
   let best=null;
   const stack=_domBodyStack; stack.length=0;
-  for(let i=0;i<STAR_BODIES.length;i++) stack.push(STAR_BODIES[i]);
+  for(let i=0;i<STAR_BODIES.length;i++){ if(!isProcHidden(STAR_BODIES[i])) stack.push(STAR_BODIES[i]); }
   while(stack.length){
     const p=stack.pop();
     const ppos=planetPositionAt(p,t);
@@ -1045,16 +1121,375 @@ function findDominantBody(pos,t){
   return best;
 }
 
+function domBodyContains(p,pos,t){
+  const ppos=planetPositionAt(p,t);
+  const d=Math.hypot(pos.x-ppos.x,pos.y-ppos.y);
+  return d<=p.soi ? {p,ppos,dist:d} : null;
+}
+function dominantAmongChildren(parentKey,pos,t){
+  const kids=BODY_CHILDREN[parentKey];
+  if(!kids) return null;
+  let deepest=null;
+  for(let i=0;i<kids.length;i++){
+    const hit=domBodyContains(kids[i],pos,t);
+    if(hit&&(!deepest||hit.p.soi<deepest.p.soi)) deepest=hit;
+  }
+  return deepest;
+}
+function cheapDominantRecheck(prevDom,pos,t){
+  const selfHit=domBodyContains(prevDom.p,pos,t);
+  if(selfHit) return dominantAmongChildren(prevDom.p.key,pos,t)||selfHit;
+  let cur=BODIES_BY_KEY[prevDom.p.parent];
+  while(cur){
+    const hit=domBodyContains(cur,pos,t);
+    if(hit) return dominantAmongChildren(cur.key,pos,t)||hit;
+    cur=BODIES_BY_KEY[cur.parent];
+  }
+  return null; // shouldn't happen
+}
+
 const EARTH = PLANETS.find(p=>p.key==='earth');
 // actual simulated surface gravity gm r
 const EARTH_SURF_G = EARTH.GM/(EARTH.radius*EARTH.radius);
 
+//PROCEDURAL PLANET / REALLY SYSTEMS anyways this is the entire thingy so heres all important procedural math.
+let HOME_BODY = EARTH;
+let proceduralMode = false;
+let proceduralSeed = null;
+
+//Deterministic prng. Inspired by Jacorb90 RNG tree
+function mulberry32(seed){
+  let t = seed>>>0;
+  return function(){
+    t = (t + 0x6D2B79F5)|0;
+    let r = Math.imul(t ^ (t>>>15), 1 | t);
+    r = (r + Math.imul(r ^ (r>>>7), 61 | r)) ^ r;
+    return ((r ^ (r>>>14))>>>0) / 4294967296;
+  };
+}
+function rngRange(rng,min,max){ return min + rng()*(max-min); }
+function rngInt(rng,min,max){ return Math.floor(rngRange(rng,min,max+1)); }
+
+function hslToRgb(h,s,l){
+  s/=100; l/=100;
+  const c=(1-Math.abs(2*l-1))*s;
+  const x=c*(1-Math.abs((h/60)%2-1));
+  const m=l-c/2;
+  let r=0,g=0,b=0;
+  if(h<60){r=c;g=x;b=0;} else if(h<120){r=x;g=c;b=0;} else if(h<180){r=0;g=c;b=x;}
+  else if(h<240){r=0;g=x;b=c;} else if(h<300){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  return {R:(r+m)*255, G:(g+m)*255, B:(b+m)*255};
+}
+//Min color so we dont get some black planet you cant see
+function enforceBrightnessFloor(R,G,B){
+  const MIN_SUM=0x60*3;
+  let sum=R+G+B;
+  if(sum<MIN_SUM){
+    const add=(MIN_SUM-sum)/3;
+    R=Math.min(255,R+add); G=Math.min(255,G+add); B=Math.min(255,B+add);
+    sum=R+G+B;
+    if(sum<MIN_SUM){ const rest=(MIN_SUM-sum)/3; R=Math.min(255,R+rest); G=Math.min(255,G+rest); B=Math.min(255,B+rest); }
+  }
+  return {R:Math.round(R),G:Math.round(G),B:Math.round(B)};
+}
+function toHexColor(R,G,B){
+  const h=n=>Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+  return '#'+h(R)+h(G)+h(B);
+}
+function proceduralColor(rng,forcePurple){
+  let h,s,l;
+  if(forcePurple || rng()<0.16){ h=rngRange(rng,268,300); s=rngRange(rng,55,90); l=rngRange(rng,42,66); } // ADD123 Bright purple is more common because i feel like it. That's a part of seed gen. I can do what i want!!!!!!
+  else { h=rng()*360; s=rngRange(rng,25,75); l=rngRange(rng,30,68); }
+  const {R,G,B}=hslToRgb(h,s,l);
+  const c=enforceBrightnessFloor(R,G,B);
+  return toHexColor(c.R,c.G,c.B);
+}
+function toRoman(num){
+  const vals=[[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  let res='';
+  for(const [v,s] of vals){ while(num>=v){ res+=s; num-=v; } }
+  return res;
+}
+const PROC_STAR_PREFIXES=[
+['Ae','Al','Ar','Ari','Ca','Ce','Cyr','Da','De','Dra','Eli','Ery','Ga','Ka','Ke','Kyr','La','Ly','Ma','Me','Na','Ne','Nex','Oly','Or','Ra','Re','Ryn','Sa','Se','Sy','Ta','Te','Va','Ve','Vey','Xa','Xe','Za','Zy'],
+['ba','bel','ca','cel','da','del','dra','el','fel','ga','gel','ka','kel','kra','la','len','ma','mel','na','nel','nex','ra','rel','ren','sa','sel','sha','ta','tel','tha','va','vel','ven','xa','xel','ya','zel','zen','zha','zor'],
+['a','an','ar','ca','cel','cy','da','dra','el','en','er','ia','il','ir','ka','kel','la','le','li','ma','mel','na','ne','ni','or','ra','re','ri','sa','se','ta','te','tha','va','ve','xa','xe','ya','ze','zy']
+];
+function proceduralStarName(rng,seed){
+  const n=rng()<.2?1:rng()<.35?2:3;
+  let name=PROC_STAR_PREFIXES[0][Math.floor(rng()*40)];
+  if(n>1) name+=PROC_STAR_PREFIXES[1][Math.floor(rng()*40)];
+  if(n>2) name+=PROC_STAR_PREFIXES[2][Math.floor(rng()*40)];
+  return name.replace(/^./,c=>c.toUpperCase())+'-'+seed;
+}
+const PROC_MUSIC_THEMES=['interplanetary','nightVision','tauCeti','signal'];
+const PROC_MUSIC_BASE_HZ={interplanetary:48000,nightVision:44100,tauCeti:36000,signal:44100};
+const SEMITONE_RATIO=1.059463094;
+function pickProcMusicSemitone(rng,baseHz){
+  if(baseHz<40000){
+    const weighted=[-2,-1,0,0,1,1,2,2,3,3];
+    return weighted[Math.floor(rng()*weighted.length)];
+  }
+  return rngInt(rng,-3,3);
+}
+
+const proceduralSystems=new Map();
+let PROC_MAX_SYSTEMS=75;
+
+function touchProceduralSystem(seed){
+  const rec=proceduralSystems.get(seed);
+  if(!rec) return rec;
+  proceduralSystems.delete(seed);
+  proceduralSystems.set(seed,rec);
+  return rec;
+}
+
+const PROC_ANCHOR_MAX_ATTEMPTS=30;
+function systemOverlapsExisting(pos,radius){
+  for(let i=0;i<STAR_SYSTEMS.length;i++){
+    const sys=STAR_SYSTEMS[i];
+    const need=radius+sys.maxExtent;
+    const dx=pos.x-sys.anchorPos.x, dy=pos.y-sys.anchorPos.y;
+    if(dx*dx+dy*dy<need*need) return true;
+  }
+  return false;
+}
+function proceduralSystemAnchorPos(seed,minRadius){
+  const rng=mulberry32((seed*0x9E3779B1)^0x2545F491);
+  let pos=null;
+  for(let attempt=0;attempt<PROC_ANCHOR_MAX_ATTEMPTS;attempt++){
+    const angle=rng()*Math.PI*2;
+    const radius=PROC_REGION_MIN_RADIUS+Math.sqrt(rng())*(PROC_REGION_MAX_RADIUS-PROC_REGION_MIN_RADIUS);
+    pos={x:PROC_REGION_CENTER.x+radius*Math.cos(angle), y:PROC_REGION_CENTER.y+radius*Math.sin(angle)};
+    if(!minRadius||!systemOverlapsExisting(pos,minRadius)) return pos;
+  }
+  return pos;
+}
+function proceduralPlanetCount(rng){
+  const n=rngInt(rng,5,10);
+  if(n<10) return n;
+  let total=n, extraChance=0.2;
+  while(rng()<extraChance){ total++; extraChance/=5; }
+  return total;
+}
+const PROC_MOON_COUNT_WEIGHTS=[0,0,0,1,2,3,4];
+function proceduralMoonCount(rng){ return PROC_MOON_COUNT_WEIGHTS[Math.floor(rng()*PROC_MOON_COUNT_WEIGHTS.length)]; }
+function base26Letters(i){
+  let s='', n=i+1;
+  while(n>0){ n--; s=String.fromCharCode(97+(n%26))+s; n=Math.floor(n/26); }
+  return s;
+}
+
+function teardownProceduralSystemRecord(rec){
+  if(!rec) return;
+  rec.keys.forEach(key=>{
+    const body=BODIES_BY_KEY[key];
+    if(!body) return;
+    delete BODIES_BY_KEY[key];
+    let idx=ALL_BODIES.indexOf(body); if(idx!==-1) ALL_BODIES.splice(idx,1);
+    idx=PLANETS.indexOf(body); if(idx!==-1) PLANETS.splice(idx,1);
+    idx=STAR_BODIES.indexOf(body); if(idx!==-1) STAR_BODIES.splice(idx,1);
+    const kids=BODY_CHILDREN[body.parent];
+    if(kids){ const ki=kids.indexOf(body); if(ki!==-1) kids.splice(ki,1); }
+    delete BODY_CHILDREN[body.key];
+  });
+  if(rec.systemEntry){
+    const si=STAR_SYSTEMS.indexOf(rec.systemEntry);
+    if(si!==-1) STAR_SYSTEMS.splice(si,1);
+  }
+  proceduralSystems.delete(rec.seed);
+}
+
+function systemHasOccupant(rec){
+  for(let i=0;i<ships.length;i++){
+    const s=ships[i];
+    if(s.status!=='flying'&&s.status!=='landed') continue;
+    let body=s._domBody||s.landedOnPlanet||null;
+    if(!body&&s.landedOnAsteroid) body=BODIES_BY_KEY[s.landedOnAsteroid.homeKey]||null;
+    if(body&&body.isAsteroid) body=BODIES_BY_KEY[body.homeKey]||null;
+    const bodyKey=body?body.key:null;
+    if(bodyKey&&rec.keys.includes(bodyKey)) return true;
+  }
+  return false;
+}
+function evictOldestProceduralSystem(){
+  for(const rec of proceduralSystems.values()){
+    if(rec.homeBody===HOME_BODY || rec.star===HOME_BODY) continue; // dont evict from somewhere im at
+    if(systemHasOccupant(rec)) continue; // dont evict where ANY ship at
+    teardownProceduralSystemRecord(rec);
+    return true;
+  }
+  return false;
+}
+
+function buildProceduralSystem(seed){
+  const rng=mulberry32((seed*2654435761)^0x9e3779b9);
+  const keys=[];
+
+  const starGmMult=rngRange(rng,0.5,5.2);
+  const starRadMult=rngRange(rng,0.55,3.8);
+  const starGM=GM_SUN*starGmMult;
+  const starKey='procStar_'+seed;
+  const starName=proceduralStarName(rng,seed);
+  const theme=PROC_MUSIC_THEMES[Math.floor(rng()*PROC_MUSIC_THEMES.length)];
+  const musicSemitone=pickProcMusicSemitone(rng,PROC_MUSIC_BASE_HZ[theme]);
+
+  const star=registerStar({
+    key:starKey, name:starName, parent:null, pos:{x:0,y:0},
+    color:proceduralColor(rng), groundColor:null,
+    radius:SUN_RADIUS*starRadMult, GM:starGM, GMbase:starGM,
+    solid:false, atmo:true, atmoFrac:STAR_GLOW_ATMO_FRAC, musicTheme:theme, musicUsesAtmo:true, musicSemitone,
+    procSeed:seed,
+  });
+  keys.push(starKey);
+
+  const soiHillScale=0.4, soiHillDivisor=3, soiExtraMult=1, targetKmax=1/34;
+  const gmBaseCap=soiHillDivisor*starGM*Math.pow(targetKmax/(soiHillScale*soiExtraMult),3);
+
+  const earthEscapeMetricSq=2*11*150000;
+
+  const n=proceduralPlanetCount(rng);
+  const defs=[];
+  let prevDistAU=null;
+  for(let i=0;i<n;i++){
+    const isHome=i===0;
+    let radius = isHome ? rngRange(rng,55000,230000) : rngRange(rng,20000,4300000);
+    const bigBody = radius>500000;
+    const solid = isHome ? true : (bigBody ? rng()<0.12 : rng()<0.82);
+
+    let surfG;
+    if(isHome){
+      // balance
+      const maxMetric=earthEscapeMetricSq*rngRange(rng,0.55,1.0);
+      surfG=Math.max(1.5, maxMetric/(2*radius));
+    } else {
+      surfG=rngRange(rng,0.6,68);
+    }
+
+    let GMbase=surfG*radius*radius;
+    if(GMbase>gmBaseCap){
+      surfG=gmBaseCap/(radius*radius);
+      if(surfG<0.3){ surfG=0.3; radius=Math.sqrt(gmBaseCap/surfG); }
+    }
+
+    let distAU;
+    if(isHome){ distAU=rngRange(rng,0.5,1.6); }
+    else { distAU=prevDistAU*rngRange(rng,1.25,2.0); }
+    prevDistAU=distAU;
+
+    const wildlyEccentric=rng()<0.25;
+    const eccMod = wildlyEccentric ? rngRange(rng,0.075,0.3) : rngRange(rng,0.65,1);
+    const periArg = rng()*Math.PI*2;
+
+    const forcePurple=rng()<0.12;
+    const atmo = solid ? rng()<0.55 : true;
+    const color=proceduralColor(rng,forcePurple);
+    const groundColor= solid ? proceduralColor(rng) : null;
+    const atmoColor= atmo ? proceduralColor(rng) : undefined;
+    const atmoFrac= atmo ? (solid ? rngRange(rng,0.08,0.55) : rngRange(rng,0.3,1.1)) : undefined;
+
+    defs.push({
+      key:starKey+'_p'+i, name:starName+' '+toRoman(i+1), parent:starKey,
+      color, groundColor, radius, surfG, distAU, solid, atmo, atmoFrac, atmoColor, eccMod, periArg,
+    });
+  }
+
+  const planets=buildPlanets(defs, star, {gmBoost:10, soiHillScale, soiHillDivisor, soiExtraMult, musicTheme:theme, musicUsesAtmo:true, musicSemitone});
+  planets.forEach(p=>{
+    p.procSeed=seed;
+    keys.push(p.key);
+    if(!BODY_CHILDREN[p.parent]) BODY_CHILDREN[p.parent]=[];
+    BODY_CHILDREN[p.parent].push(p);
+  });
+
+  // moonz
+  const moonDefs=[];
+  planets.forEach(p=>{
+    const moonCount=proceduralMoonCount(rng);
+    let prevDistMod=null;
+    for(let mi=0;mi<moonCount;mi++){
+      const letter=base26Letters(mi);
+      const radiusMod=rngRange(rng,0.005,0.12);
+      const distMod = prevDistMod===null ? rngRange(rng,3,9) : prevDistMod*rngRange(rng,1.6,3.2);
+      prevDistMod=distMod;
+      const surfG=rngRange(rng,0.05,2.5);
+      const moonWildlyEccentric=rng()<0.25;
+      const eccMod = moonWildlyEccentric ? rngRange(rng,0.075,0.3) : rngRange(rng,0.65,1);
+      const periArg=rng()*Math.PI*2;
+      const moonAtmo=rng()<0.1;
+      const color=proceduralColor(rng);
+      const groundColor=proceduralColor(rng);
+      const atmoColor= moonAtmo ? proceduralColor(rng) : undefined;
+      const atmoFrac= moonAtmo ? rngRange(rng,0.05,0.3) : undefined;
+      moonDefs.push({
+        key:p.key+'-'+letter, name:p.name+'-'+letter, parent:p.key,
+        color, groundColor, radiusMod, distMod, surfG, solid:true, atmo:moonAtmo, atmoFrac, atmoColor, eccMod, periArg,
+      });
+    }
+  });
+  const moons = moonDefs.length
+    ? buildMoons(moonDefs, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:3, soiExtraMult:2.5, musicTheme:theme, musicUsesAtmo:true, musicSemitone})
+    : [];
+  moons.forEach(m=>{
+    m.procSeed=seed;
+    keys.push(m.key);
+    if(!BODY_CHILDREN[m.parent]) BODY_CHILDREN[m.parent]=[];
+    BODY_CHILDREN[m.parent].push(m);
+  });
+  planets.forEach(p=>{
+    const kids=moons.filter(m=>m.parent===p.key);
+    if(!kids.length) return;
+    const farthestApo=Math.max(...kids.map(m=>m.distance*(1+m.ecc)));
+    const minSoi=farthestApo*2;
+    if(p.soi<minSoi) p.soi=minSoi;
+  });
+
+  const farthest=planets[planets.length-1];
+  star.soi = farthest.distance * rngRange(rng,3.5,10);
+
+  const outermostReach=Math.max(...planets.map(p=>p.distance+p.soi));
+  const maxExtent=(star.soi+outermostReach)*1.5;
+  const anchorPos=proceduralSystemAnchorPos(seed,maxExtent);
+  star.pos.x=anchorPos.x; star.pos.y=anchorPos.y;
+  const systemEntry=registerStarSystem({anchorPos:star.pos, maxExtent, procSeed:seed});
+
+  const rec={seed, star, planets, homeBody:planets[0], systemEntry, keys, anchorPos};
+  proceduralSystems.set(seed,rec);
+  return rec;
+}
+
+function getOrBuildProceduralSystem(seed){
+  const existing=touchProceduralSystem(seed);
+  if(existing) return existing;
+  if(proceduralSystems.size>=PROC_MAX_SYSTEMS) evictOldestProceduralSystem();
+  return buildProceduralSystem(seed);
+}
+
+function previewProceduralSystem(seed){
+  const rng=mulberry32((seed*2654435761)^0x9e3779b9);
+  rngRange(rng,0.5,2.2);
+  rngRange(rng,0.55,1.8);
+  const starName=proceduralStarName(rng,seed);
+  const previewThemeIdx=Math.floor(rng()*PROC_MUSIC_THEMES.length);
+  pickProcMusicSemitone(rng,PROC_MUSIC_BASE_HZ[PROC_MUSIC_THEMES[previewThemeIdx]]);
+  proceduralColor(rng);
+  const n=proceduralPlanetCount(rng);
+  return {starName, planetCount:n, homeName:starName+' '+toRoman(1)};
+}
+
+function buildProcSeedNoteText(seed,starName,planetCount,homeName,spawnAtSeed){
+  return 'System seed '+seed+', '+starName+', '+planetCount+' planets. '
+    +(spawnAtSeed?('Starting on '+homeName+'.'):'Added to the galaxy, starting on Earth.');
+}
+
+function isProcHidden(b){ return b.procSeed!=null && !proceduralMode; }
+
 // part definitions thrust fuel values gameplay
 const PARTS = {
   pod:   {id:'pod',  name:'Command Pod',       w:2,h:2,dryMass:800, fuel:0,    thrust:0,      fuelRate:0,  color:'#8fb7ff',type:'pod',cat:'Command',heatResist:0.35},
-  tankS: {id:'tankS',name:'Fuel Tank — Small', w:2,h:4,dryMass:400, fuel:1800, thrust:0,      fuelRate:0,  color:'#c7cdd6',type:'tank',cat:'Fuel',heatResist:0.10},
-  tankM: {id:'tankM',name:'Fuel Tank — Medium',w:4,h:6,dryMass:700, fuel:4200, thrust:0,      fuelRate:0,  color:'#aab2bd',type:'tank',cat:'Fuel',heatResist:0.10},
-  tankL: {id:'tankL',name:'Fuel Tank — Large', w:4,h:8,dryMass:1100,fuel:8000, thrust:0,      fuelRate:0,  color:'#8d96a3',type:'tank',cat:'Fuel',heatResist:0.10},
+  tankS: {id:'tankS',name:'Fuel Tank - Small', w:2,h:4,dryMass:400, fuel:1800, thrust:0,      fuelRate:0,  color:'#c7cdd6',type:'tank',cat:'Fuel',heatResist:0.10},
+  tankM: {id:'tankM',name:'Fuel Tank - Medium',w:4,h:6,dryMass:700, fuel:4200, thrust:0,      fuelRate:0,  color:'#aab2bd',type:'tank',cat:'Fuel',heatResist:0.10},
+  tankL: {id:'tankL',name:'Fuel Tank - Large', w:4,h:8,dryMass:1100,fuel:8000, thrust:0,      fuelRate:0,  color:'#8d96a3',type:'tank',cat:'Fuel',heatResist:0.10},
   engB:  {id:'engB', name:'Basic Engine',      w:2,h:3,dryMass:500, fuel:0,    thrust:900000, fuelRate:25, color:'#ff8a4c',type:'engine',cat:'Engines',heatResist:0.25},
   engA:  {id:'engA', name:'Advanced Engine',   w:4,h:3,dryMass:650, fuel:0,    thrust:1900000, fuelRate:45,   color:'#ff5c4c',type:'engine',cat:'Engines',heatResist:0.25},
   engQB: {id:'engQB',name:'Quickburn Basic Engine',   w:2,h:3,dryMass:450, fuel:0, thrust:2720000,  fuelRate:150,  color:'#1a1a1a',type:'engine',cat:'Engines',heatResist:0.25},
@@ -1069,16 +1504,16 @@ const PARTS = {
   solar: {id:'solar',name:'Solar Panel',       w:4,h:1,dryMass:45,  fuel:0,    thrust:0,      fuelRate:0,  color:'#1a3a7a',type:'solar',cat:'Utility',heatResist:0.05},
   ionStorage:{id:'ionStorage',name:'Ion Storage', w:2,h:2,dryMass:80, fuel:0,  thrust:0,      fuelRate:0,  color:'#2a5a3a',type:'ionstorage',cat:'Utility',heatResist:0.15},
   fuelComp:{id:'fuelComp',name:'Fuel Compressor', w:4,h:3,dryMass:1650, rawMass:2200, fuel:0, thrust:0, fuelRate:0, color:'#23262b',type:'fuelcompressor',cat:'Utility',heatResist:0.20,heatShield:true,heatBlock:0.60},
-  coneS: {id:'coneS',name:'Nose Cone — Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',cat:'Aero',dragMult:0.7,heatResist:0.5},
-  coneM: {id:'coneM',name:'Nose Cone — Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',cat:'Aero',dragMult:0.55,heatResist:0.55},
-  coneL: {id:'coneL',name:'Nose Cone — Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',cat:'Aero',dragMult:0.4,heatResist:0.6},
-  fairS: {id:'fairS',name:'Fairing — Small',   w:2,h:4,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#d0d6de',type:'fairing',cat:'Aero',dragMult:0.5,heatResist:0.45},
-  fairM: {id:'fairM',name:'Fairing — Medium',  w:4,h:6,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4cad2',type:'fairing',cat:'Aero',dragMult:0.45,heatResist:0.5},
-  fairL: {id:'fairL',name:'Fairing — Large',   w:4,h:8,dryMass:200, fuel:0,    thrust:0,      fuelRate:0,  color:'#b8bec6',type:'fairing',cat:'Aero',dragMult:0.4,heatResist:0.55},
+  coneS: {id:'coneS',name:'Nose Cone - Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',cat:'Aero',dragMult:0.7,heatResist:0.5},
+  coneM: {id:'coneM',name:'Nose Cone - Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',cat:'Aero',dragMult:0.55,heatResist:0.55},
+  coneL: {id:'coneL',name:'Nose Cone - Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',cat:'Aero',dragMult:0.4,heatResist:0.6},
+  fairS: {id:'fairS',name:'Fairing - Small',   w:2,h:4,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#d0d6de',type:'fairing',cat:'Aero',dragMult:0.5,heatResist:0.45},
+  fairM: {id:'fairM',name:'Fairing - Medium',  w:4,h:6,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4cad2',type:'fairing',cat:'Aero',dragMult:0.45,heatResist:0.5},
+  fairL: {id:'fairL',name:'Fairing - Large',   w:4,h:8,dryMass:200, fuel:0,    thrust:0,      fuelRate:0,  color:'#b8bec6',type:'fairing',cat:'Aero',dragMult:0.4,heatResist:0.55},
   fairTip:{id:'fairTip',name:'Fairing Cone Tip', w:2,h:2,dryMass:40,fuel:0,    thrust:0,      fuelRate:0,  color:'#e0e4ea',type:'fairing',cat:'Aero',dragMult:0.35,fairingTip:true,heatResist:0.5},
-  heatShieldS:{id:'heatShieldS',name:'Heat Shield — Small', w:2,h:1,dryMass:140,fuel:0,thrust:0,fuelRate:0,color:'#8a5a3a',type:'heatshield',cat:'Aero',dragMult:0.6,heatResist:0.9,heatShield:true,heatBlock:0.90},
-  heatShieldM:{id:'heatShieldM',name:'Heat Shield — Medium',w:4,h:1,dryMass:230,fuel:0,thrust:0,fuelRate:0,color:'#7a4e30',type:'heatshield',cat:'Aero',dragMult:0.55,heatResist:0.92,heatShield:true,heatBlock:0.96},
-  heatShieldL:{id:'heatShieldL',name:'Heat Shield — Large', w:4,h:1,dryMass:340,fuel:0,thrust:0,fuelRate:0,color:'#6a4228',type:'heatshield',cat:'Aero',dragMult:0.5,heatResist:0.95,heatShield:true,heatBlock:0.99},
+  heatShieldS:{id:'heatShieldS',name:'Heat Shield - Small', w:2,h:1,dryMass:140,fuel:0,thrust:0,fuelRate:0,color:'#8a5a3a',type:'heatshield',cat:'Aero',dragMult:0.6,heatResist:0.9,heatShield:true,heatBlock:0.90},
+  heatShieldM:{id:'heatShieldM',name:'Heat Shield - Medium',w:4,h:1,dryMass:230,fuel:0,thrust:0,fuelRate:0,color:'#7a4e30',type:'heatshield',cat:'Aero',dragMult:0.55,heatResist:0.92,heatShield:true,heatBlock:0.96},
+  heatShieldL:{id:'heatShieldL',name:'Heat Shield - Large', w:4,h:1,dryMass:340,fuel:0,thrust:0,fuelRate:0,color:'#6a4228',type:'heatshield',cat:'Aero',dragMult:0.5,heatResist:0.95,heatShield:true,heatBlock:0.99},
 };
 const PART_LIST = Object.values(PARTS);
 const PART_CATS = ['Command','Fuel','Engines','Staging','Aero','Utility'];
@@ -1700,6 +2135,8 @@ let hoverCell = null;
 let panState = null;
 let gridCam = {x:COLS/2, y:ROWS/2, zoom:1, inited:false};
 let simTime = 0;
+// float origin. fixes tons of stuff
+let originOffset = {x:0, y:0};
 
 // Cheat flags
 const cheats = {
@@ -2298,7 +2735,7 @@ function updateStats(){
   let warn='';
   if(s.pods===0) warn='Needs a Command Pod.';
   else if(s.engines===0) warn='Needs at least one Engine.';
-  else if(s.twr<1) warn='TWR < 1 — this rocket cannot lift off!';
+  else if(s.twr<1) warn='TWR < 1 - this rocket cannot lift off!';
   el('s-warn').textContent=warn;
   el('launchBtn').disabled=!(s.pods>0&&s.engines>0&&s.twr>=1);
 }
@@ -2316,6 +2753,7 @@ el('cheatBigGrid').onchange=e=>{
 // SHIPS
 // ============================================================
 const SAVE_KEY = 'sfs_ships_v3'; // localStorage key; bump the suffix if the save schema changes
+const PROC_SAVE_KEY = 'sfs_procgen_v1';
 let ships = [];
 let activeShipIdx = -1;
 let warp = 1;
@@ -2366,7 +2804,7 @@ function shipFootOffset(ship){
   return (ship.sprite.cellsH-ship.sprite.comYc)*CELL_WORLD;
 }
 function groundPadOffset(p){
-  return p===EARTH?LAUNCH_PAD_HEIGHT:0;
+  return p===HOME_BODY?LAUNCH_PAD_HEIGHT:0;
 }
 //Ion storage charging via solar panels. Not in the modded branch by Kampf, but i wanted to change up batteries. These are only used by Ion engines
 const ION_CHARGE_DAY_SECONDS=86400;                    
@@ -2395,6 +2833,7 @@ function ionChargeRate(shipPos,simTimeNow,solarPanelCount){
   if(!solarPanelCount) return 0;
   let rate=0;
   STAR_BODIES.forEach(star=>{
+    if(isProcHidden(star)) return;
     const sp=planetPositionAt(star,simTimeNow);
     const r=Math.hypot(shipPos.x-sp.x,shipPos.y-sp.y);
     if(r<=star.soi) rate+=1/ionChargeTimeForStar(star,r);
@@ -2603,8 +3042,8 @@ function launch(){
   const prev=activeShip();
   if(prev) prev.engineOn=false;
   shipCounter++;
-  const earthPos=planetPositionAt(EARTH,simTime);
-  const earthVel=planetVelocityAt(EARTH,simTime);
+  const earthPos=planetPositionAt(HOME_BODY,simTime);
+  const earthVel=planetVelocityAt(HOME_BODY,simTime);
   const earthNx=LAUNCH_PAD_DIR.x;
   const earthNy=LAUNCH_PAD_DIR.y;
   const PAD_H=LAUNCH_PAD_HEIGHT;
@@ -2620,7 +3059,7 @@ function launch(){
   const ship={
     id:'ship-'+shipCounter, name:'Ship '+shipCounter,
     parts, sprite,
-    pos:{x:earthPos.x+earthNx*EARTH.radius, y:earthPos.y+earthNy*EARTH.radius},
+    pos:{x:earthPos.x+earthNx*HOME_BODY.radius, y:earthPos.y+earthNy*HOME_BODY.radius},
     vel:{x:earthVel.x, y:earthVel.y},
     angle:Math.atan2(earthNx,earthNy),
     dryMass:stats.dryMass, fuel:stats.fuel, fuelCap:stats.fuel,
@@ -2629,12 +3068,12 @@ function launch(){
     tankFuel, engineEnabled, engineConnections,
     compressorOn, compressorIon, compressorConnections,
     engineOn:false, throttle:1, chuteDeployed:false,
-    status:'landed', statusMsg:'Ready for launch on Earth.', landedOnAsteroid:null,
-    trail:makeTrail(), lastTrailPos:null, _inAtmo:true, _domBody:EARTH,
-    landedOnPlanet:EARTH, partHeat:{},
+    status:'landed', statusMsg:'Ready for launch on '+HOME_BODY.name+'.', landedOnAsteroid:null,
+    trail:makeTrail(), lastTrailPos:null, _inAtmo:true, _domBody:HOME_BODY,
+    landedOnPlanet:HOME_BODY, partHeat:{},
   };
   const foot=shipFootOffset(ship);
-  const groundR=EARTH.radius+PAD_H+foot;
+  const groundR=HOME_BODY.radius+PAD_H+foot;
   ship.pos.x=earthPos.x+earthNx*groundR;
   ship.pos.y=earthPos.y+earthNy*groundR;
   ship.landedRelPos={x:earthNx*groundR, y:earthNy*groundR};
@@ -2657,6 +3096,65 @@ function showScreen(name){
   el(name).classList.add('active');
 }
 
+function clampSeed(n){
+  n=Math.round(n);
+  if(!isFinite(n)) return null;
+  return Math.min(1000000,Math.max(1,n));
+}
+function randomSeedValue(){ return 1+Math.floor(Math.random()*1000000); }
+el('procPlanetsToggle').onchange=e=>{
+  proceduralMode=e.target.checked;
+  el('procSeedRow').style.display=proceduralMode?'flex':'none';
+  el('procSpawnRow').style.display=proceduralMode?'flex':'none';
+  el('procLimitRow').style.display=proceduralMode?'flex':'none';
+  el('procPlanetsSub').textContent=proceduralMode
+    ?'On. Procedural systems are added to the galaxy'
+    :'Off. only the IRL systems are shown';
+  updateProcSeedPreview();
+};
+function updateProcSeedPreview(){
+  if(!proceduralMode){ el('procSeedNote').style.display='none'; return; }
+  const seed=clampSeed(parseInt(el('procSeedInput').value,10));
+  if(seed===null){ el('procSeedNote').style.display='none'; return; }
+  const preview=previewProceduralSystem(seed);
+  const spawnAtSeed=el('procSpawnAtSeedToggle').checked;
+  el('procSeedNote').style.display='block';
+  el('procSeedNote').textContent=buildProcSeedNoteText(seed,preview.starName,preview.planetCount,preview.homeName,spawnAtSeed);
+}
+el('procSeedRandomBtn').onclick=()=>{ el('procSeedInput').value=randomSeedValue(); updateProcSeedPreview(); };
+el('procSeedInput').addEventListener('input',updateProcSeedPreview);
+el('procSeedInput').addEventListener('change',()=>{
+  const v=clampSeed(parseInt(el('procSeedInput').value,10));
+  el('procSeedInput').value=v===null?'':v;
+  updateProcSeedPreview();
+});
+el('procSpawnAtSeedToggle').onchange=e=>{
+  el('procSpawnSub').textContent=e.target.checked
+    ?"Add seed's system it to the galaxy and you begin there, on an earthlike planet. Good challenge - try to get home."
+    :"Earth. Seed's system is still added.";
+  updateProcSeedPreview();
+};
+el('procLimitInput').addEventListener('change',()=>{
+  let v=Math.round(parseInt(el('procLimitInput').value,10));
+  if(!isFinite(v)||v<1) v=1;
+  PROC_MAX_SYSTEMS=v;
+  el('procLimitInput').value=v;
+  while(proceduralSystems.size>PROC_MAX_SYSTEMS){ if(!evictOldestProceduralSystem()) break; }
+  saveSettings();
+  saveProceduralSystems();
+});
+// antirestore from browser
+el('procPlanetsToggle').checked=false;
+el('procSeedInput').value='';
+el('procSeedRow').style.display='none';
+el('procSpawnRow').style.display='none';
+el('procLimitRow').style.display='none';
+el('procSpawnAtSeedToggle').checked=true;
+el('procPlanetsSub').textContent='Off. Only real life systems are shown.';
+el('procSpawnSub').textContent="Add seed's system it to the galaxy and you begin there, on an earthlike planet. Good challenge - try to get home.";
+PROC_MAX_SYSTEMS=(typeof _savedSettings.procSystemLimit==='number'&&_savedSettings.procSystemLimit>=1)?Math.round(_savedSettings.procSystemLimit):75;
+el('procLimitInput').value=PROC_MAX_SYSTEMS;
+
 el('menuPlayBtn').onclick=()=>{
   // go to saved game instead of build
   if(pendingRestoredFlight){
@@ -2665,6 +3163,29 @@ el('menuPlayBtn').onclick=()=>{
     el('toBuildBtn').style.display='inline-block';
     mode='flight';
   } else {
+    if(proceduralMode){
+      const typed=clampSeed(parseInt(el('procSeedInput').value,10));
+      const seed=typed===null?randomSeedValue():typed;
+      el('procSeedInput').value=seed;
+      proceduralSeed=seed;
+      const gen=getOrBuildProceduralSystem(seed);
+      const spawnAtSeed=el('procSpawnAtSeedToggle').checked;
+      HOME_BODY=spawnAtSeed?gen.homeBody:EARTH;
+      ships.length=0; activeShipIdx=-1; placedParts=[];
+      el('procSeedNote').style.display='block';
+      el('procSeedNote').textContent=buildProcSeedNoteText(seed,gen.star.name,gen.planets.length,gen.homeBody.name,spawnAtSeed);
+      saveProceduralSystems();
+    } else {
+// real dont delete just hides ok
+      if(HOME_BODY!==EARTH){
+        HOME_BODY=EARTH;
+        ships.length=0; activeShipIdx=-1; placedParts=[];
+      }
+      el('procSeedNote').style.display='none';
+      saveProceduralSystems();
+    }
+    recalcLaunchPadDir();
+    mode='build';
     showScreen('buildScreen');
     el('toBuildBtn').style.display='none';
     drawGrid();
@@ -2689,7 +3210,7 @@ el('toBuildBtn').onclick=()=>{
 function saveShips(){
   try{
     const data=ships
-      .filter(s=>s.status==='flying')
+      .filter(s=>s.status==='flying'||s.status==='landed')
       .map(s=>({
         id:s.id, name:s.name, parts:s.parts,
         pos:s.pos, vel:s.vel, angle:s.angle,
@@ -2700,8 +3221,12 @@ function saveShips(){
         throttle:s.throttle, chuteDeployed:s.chuteDeployed,
         status:s.status, ionCharge:s.ionCharge||0,
         partHeat:s.partHeat,
+        landedOnPlanetKey:s.landedOnPlanet?s.landedOnPlanet.key:null,
+        landedOnAsteroidId:s.landedOnAsteroid?s.landedOnAsteroid.id:null,
+        landedRelPos:s.landedRelPos||null,
+        landedFacingLocal:typeof s.landedFacingLocal==='number'?s.landedFacingLocal:null,
       }));
-    localStorage.setItem(SAVE_KEY,JSON.stringify({simTime,shipCounter,ships:data}));
+    localStorage.setItem(SAVE_KEY,JSON.stringify({simTime,shipCounter,ships:data,originOffset}));
   }catch(err){}
 }
 function loadShips(){
@@ -2712,6 +3237,10 @@ function loadShips(){
     if(!data||!Array.isArray(data.ships)||!data.ships.length) return false;
     simTime=typeof data.simTime==='number'?data.simTime:0;
     shipCounter=typeof data.shipCounter==='number'?data.shipCounter:data.ships.length;
+    const savedOffset=data.originOffset&&typeof data.originOffset.x==='number'&&typeof data.originOffset.y==='number'
+      ?data.originOffset:{x:0,y:0};
+    if(savedOffset.x||savedOffset.y) shiftAnchors(savedOffset.x,savedOffset.y);
+    originOffset.x=savedOffset.x; originOffset.y=savedOffset.y;
     ships=data.ships.map(s=>{
       const parts=Array.isArray(s.parts)&&s.parts.length?s.parts:[{id:'pod',col:0,row:0,uid:partUidCounter++}];
       parts.forEach(pp=>{ if(pp.uid===undefined) pp.uid=partUidCounter++; });
@@ -2731,6 +3260,20 @@ function loadShips(){
       });
       const ps=statsFromParts(parts);
       const ionCap=ps.ionStorages*ION_STORAGE_CAPACITY;
+      let status='flying', landedOnPlanet=null, landedOnAsteroid=null, landedRelPos=null, landedFacingLocal=undefined;
+      if(s.status==='landed'&&s.landedOnPlanetKey&&BODIES_BY_KEY[s.landedOnPlanetKey]){
+        status='landed';
+        landedOnPlanet=BODIES_BY_KEY[s.landedOnPlanetKey];
+        landedRelPos=s.landedRelPos||{x:0,y:0};
+      } else if(s.status==='landed'&&s.landedOnAsteroidId){
+        const ast=asteroids.find(a=>a.id===s.landedOnAsteroidId);
+        if(ast){
+          status='landed';
+          landedOnAsteroid=ast;
+          landedRelPos=s.landedRelPos||{x:0,y:0};
+          landedFacingLocal=typeof s.landedFacingLocal==='number'?s.landedFacingLocal:0;
+        }
+      }
       return {
         id:s.id, name:s.name, parts, sprite,
         pos:s.pos, vel:s.vel, angle:s.angle||0,
@@ -2741,8 +3284,9 @@ function loadShips(){
         compressorOn, compressorIon, compressorConnections:computeCompressorConnections(parts),
         engineOn:false, throttle:typeof s.throttle==='number'?s.throttle:1,
         chuteDeployed:!!s.chuteDeployed,
-        status:'flying', statusMsg:'',
-        trail:makeTrail(), lastTrailPos:null, _inAtmo:false, _domBody:null,
+        status, statusMsg:status==='landed'?('Landed on '+(landedOnPlanet||landedOnAsteroid).name+'.'):'',
+        landedOnPlanet, landedOnAsteroid, landedRelPos, landedFacingLocal,
+        trail:makeTrail(), lastTrailPos:null, _inAtmo:false, _domBody:status==='landed'?(landedOnPlanet||landedOnAsteroid):null,
         partHeat:s.partHeat||{},
       };
     });
@@ -2764,6 +3308,42 @@ function loadRocketDesigns(){
   }catch(err){ return []; }
 }
 let savedRockets = loadRocketDesigns();
+
+function saveProceduralSystems(){
+  try{
+    localStorage.setItem(PROC_SAVE_KEY, JSON.stringify({
+      proceduralMode, proceduralSeed,
+      seeds:Array.from(proceduralSystems.keys()),
+      homeBodyKey: HOME_BODY?HOME_BODY.key:null,
+    }));
+  }catch(err){}
+}
+function loadProceduralSystems(){
+  try{
+    const raw=localStorage.getItem(PROC_SAVE_KEY);
+    if(!raw) return;
+    const data=JSON.parse(raw);
+    if(!data) return;
+    if(Array.isArray(data.seeds)){
+      data.seeds.forEach(sd=>{
+        const seed=clampSeed(sd);
+        if(seed!==null) getOrBuildProceduralSystem(seed);
+      });
+    }
+    proceduralMode=!!data.proceduralMode;
+    proceduralSeed=typeof data.proceduralSeed==='number'?data.proceduralSeed:null;
+    if(data.homeBodyKey&&BODIES_BY_KEY[data.homeBodyKey]) HOME_BODY=BODIES_BY_KEY[data.homeBodyKey];
+    el('procPlanetsToggle').checked=proceduralMode;
+    el('procSeedRow').style.display=proceduralMode?'flex':'none';
+    el('procSpawnRow').style.display=proceduralMode?'flex':'none';
+    el('procLimitRow').style.display=proceduralMode?'flex':'none';
+    el('procPlanetsSub').textContent=proceduralMode
+      ?'On. Procedural systems are added to the galaxy'
+      :'Off. only the IRL systems are shown';
+    if(proceduralSeed!=null) el('procSeedInput').value=proceduralSeed;
+    updateProcSeedPreview();
+  }catch(err){}
+}
 function renderSavedRocketsList(){
   const wrap=el('savedRocketsList');
   if(!savedRockets.length){
@@ -2796,7 +3376,7 @@ function loadRocketDesign(i){
   showToast('Loaded rocket "'+r.name+'".');
 }
 el('saveRocketBtn').onclick=()=>{
-  if(!placedParts.length){ showToast('Nothing to save — place some parts first.'); return; }
+  if(!placedParts.length){ showToast('Nothing to save - place some parts first.'); return; }
   const name=prompt('Name this rocket design:','Rocket '+(savedRockets.length+1));
   if(!name) return;
   const parts=placedParts.map(pp=>({id:pp.id,col:pp.col,row:pp.row,rot:pp.rot||0}));
@@ -3045,8 +3625,9 @@ el('cheatIndestructible').onchange=e=>{ cheats.indestructible=e.target.checked; 
     const foot=sh.sprite?sh.sprite.comYc*CELL_WORLD:8;
     if(body.solid){
       // Land flush on surface
-      const dist=Math.hypot(ppos.x,ppos.y)||1;
-      const nx=ppos.x/dist, ny=ppos.y/dist;
+      const dSunX=ppos.x-SUN_POS.x, dSunY=ppos.y-SUN_POS.y;
+      const dist=Math.hypot(dSunX,dSunY)||1;
+      const nx=dSunX/dist, ny=dSunY/dist;
       const surfR=body.radius+foot+2+groundPadOffset(body);
       sh.pos.x=ppos.x+nx*surfR; sh.pos.y=ppos.y+ny*surfR;
       sh.vel.x=pvel.x; sh.vel.y=pvel.y;
@@ -3057,8 +3638,9 @@ el('cheatIndestructible').onchange=e=>{ cheats.indestructible=e.target.checked; 
       sh._inAtmo=!!body.atmo;
     } else {
       // Gas giant — float high in the outer atmosphere, not deep
-      const dist=Math.hypot(ppos.x,ppos.y)||1;
-      const nx=ppos.x/dist, ny=ppos.y/dist;
+      const dSunX=ppos.x-SUN_POS.x, dSunY=ppos.y-SUN_POS.y;
+      const dist=Math.hypot(dSunX,dSunY)||1;
+      const nx=dSunX/dist, ny=dSunY/dist;
       const floatR=body.radius*0.92;
       sh.pos.x=ppos.x+nx*floatR; sh.pos.y=ppos.y+ny*floatR;
       sh.vel.x=pvel.x; sh.vel.y=pvel.y;
@@ -3251,7 +3833,7 @@ function activateSeparator(ship,sepIdx){
   ship.parts=keep;
   if(!ship.parts.length){ destroyShip(ship,ship.name+' had no parts left after staging.'); return; }
   recomputeShipFromParts(ship);
-  showToast(ship.name+': staged — '+discarded+' part(s) jettisoned.');
+  showToast(ship.name+': staged - '+discarded+' part(s) jettisoned.');
   renderStagingList(); renderFuelList(); updateChuteBtn(); saveShips();
 }
 
@@ -3340,7 +3922,7 @@ function setCamFree(on){
   camFree=!!on;
   const b=el('camFreeBtn');
   if(b){ b.style.borderColor=camFree?'var(--accent)':''; b.style.color=camFree?'var(--accent)':''; }
-  if(camFree) showToast('Free camera ON — drag to pan · F to follow ship');
+  if(camFree) showToast('Free camera ON - drag to pan · F to follow ship');
   else showToast('Camera following ship');
   updateZoomButtons();
 }
@@ -3440,7 +4022,7 @@ function showCtxMenu(idx,screenX,screenY){
   ctxTargetIdx=idx;
   const menu=el('shipCtxMenu');
   const sh=ships[idx];
-  el('ctxShipName').textContent=sh.name+' — '+sh.status;
+  el('ctxShipName').textContent=sh.name+' - '+sh.status;
   const CW=flightCanvas.clientWidth, CH=flightCanvas.clientHeight;
   menu.style.left=Math.min(screenX+8,CW-190)+'px';
   menu.style.top=Math.min(screenY+8,CH-140)+'px';
@@ -3463,6 +4045,7 @@ flightCanvas.addEventListener('click',e=>{
   if(cheats.navBeacon&&activeShip()&&activeShip().status==='flying'){
     let bestPlanet=null, bestPlanetD=Infinity;
     for(const p of PLANETS){
+      if(isProcHidden(p)) continue;
       const ppos=planetPositionAt(p,simTime);
       const s=worldToScreen(ppos.x,ppos.y);
       const rPx=Math.max(4,p.radius/camera.metersPerPixel);
@@ -3825,7 +4408,7 @@ function asteroidHasOccupant(a){
 function evictShipsFromAsteroid(a){
   ships.forEach(s=>{
     if(s.landedOnAsteroid!==a) return;
-    s.status='flying'; s.statusMsg='Launched — the asteroid drifted out of range and broke up.';
+    s.status='flying'; s.statusMsg='Launched - the asteroid drifted out of range and broke up.';
     shipListDirty=true;
     s.landedOnPlanet=null; s.landedOnAsteroid=null; s.landedRelPos=null; s.landedFacingLocal=undefined;
     s.vel.x=a.vel.x; s.vel.y=a.vel.y;
@@ -3854,6 +4437,47 @@ function updateAsteroids(simSeconds,tStart){
     const ids=new Set(removed.map(a=>a.id));
     asteroids=asteroids.filter(a=>!ids.has(a.id));
   }
+}
+
+const ASTEROID_SAVE_KEY = 'sfs_asteroids_v1';
+function saveAsteroids(){
+  try{
+    const data=asteroids.map(a=>({
+      id:a.id, homeKey:a.homeKey,
+      radiusM:a.radiusM, GM:a.GM, GMbase:a.GMbase, homeGM:a.homeGM, soi:a.soi,
+      rp:a.rp, thetaE:a.thetaE, orient:a.orient, mirrored:a.mirrored, periapsisT:a.periapsisT,
+      spawnedAt:a.spawnedAt, color:a.color, angle0:a.angle0, spin:a.spin, verts:a.verts,
+    }));
+    localStorage.setItem(ASTEROID_SAVE_KEY, JSON.stringify({idSeq:_asteroidIdSeq, asteroids:data}));
+  }catch(err){}
+}
+function loadAsteroids(){
+  try{
+    const raw=localStorage.getItem(ASTEROID_SAVE_KEY);
+    if(!raw) return;
+    const data=JSON.parse(raw);
+    if(!data||!Array.isArray(data.asteroids)) return;
+    data.asteroids.forEach(sa=>{
+      const body=BODIES_BY_KEY[sa.homeKey];
+      if(!body) return;
+      const a={
+        id:sa.id, key:sa.id, parent:sa.homeKey, homeKey:sa.homeKey, isAsteroid:true, solid:true, atmo:false,
+        musicTheme:'moonEurofunk', name:'an asteroid',
+        radiusM:sa.radiusM, radius:sa.radiusM,
+        GM:sa.GM, GMbase:sa.GMbase, homeGM:sa.homeGM,
+        soi:sa.soi,
+        rp:sa.rp, thetaE:sa.thetaE, orient:sa.orient, mirrored:!!sa.mirrored, periapsisT:sa.periapsisT,
+        spawnedAt:sa.spawnedAt,
+        color:sa.color,
+        angle0:sa.angle0, angle:sa.angle0, spin:sa.spin,
+        verts:Array.isArray(sa.verts)&&sa.verts.length?sa.verts:Array.from({length:9},()=>0.62+Math.random()*0.55),
+      };
+      a.pos={x:0,y:0}; a.vel={x:0,y:0};
+      registerAsteroidBody(a);
+      asteroids.push(a);
+    });
+    if(typeof data.idSeq==='number') _asteroidIdSeq=Math.max(_asteroidIdSeq,data.idSeq);
+  }catch(err){}
 }
 
 // weird shape instead of sphere like planet yey
@@ -4051,7 +4675,7 @@ function shipDragMult(f){
 //prevent clipping through solid planets and by extension new asteroids.
 function checkTunnelCollisions(f,domBody,tNew){
   for(const p of PLANETS){
-    if(!p.solid||p===domBody) continue;
+    if(!p.solid||p===domBody||isProcHidden(p)) continue;
     const ppos=planetPositionAt(p,tNew);
     const d=Math.hypot(f.pos.x-ppos.x,f.pos.y-ppos.y);
     const foot=shipFootOffset(f);
@@ -4171,7 +4795,7 @@ function integrate(f,dt,t,domIn){
     f.pos.x=pPosNew.x+rx; f.pos.y=pPosNew.y+ry;
     f.vel.x=pVelNew.x+rvx; f.vel.y=pVelNew.y+rvy;
 
-    if(Math.hypot(f.pos.x,f.pos.y)<=SUN_RADIUS){
+    if(Math.hypot(f.pos.x-SUN_POS.x,f.pos.y-SUN_POS.y)<=SUN_RADIUS){
       destroyShip(f,f.name+' was vaporized by the Sun.'); return;
     }
 
@@ -4259,8 +4883,15 @@ function stepSimSeconds(f,simSeconds,tStart,maxSubstepDtOverride){
   const dynMax=simSeconds/MAX_SUBSTEPS_PER_FRAME;
   let startDomKey=null, first=true; 
   const startInAtmo=!!f._inAtmo; 
+  // ADD124 seed the cache from the ship's last known dominant body instead of resetting to null
+  // on every call. Previously every call (i.e. every frame) paid for one full STAR_BODIES scan no
+  // matter what, since cachedDom only helped *within* a call's own substep loop. With 75 procedural
+  // systems on the books that per-frame floor got expensive. domBodyContains() here is a single
+  // cheap check; if it still holds (by far the common case) the whole first substep skips the scan.
+  let cachedDom=f._domBody?domBodyContains(f._domBody,f.pos,t):null;
   while(remaining>1e-6&&steps<MAX_SUBSTEPS_PER_FRAME&&f.status==='flying'){
-    const dom=findDominantBody(f.pos,t);
+    const dom=cachedDom?(cheapDominantRecheck(cachedDom,f.pos,t)||findDominantBody(f.pos,t)):findDominantBody(f.pos,t);
+    cachedDom=dom;
     const domKey=dom?dom.p.key:null; 
     if(first){ startDomKey=domKey; first=false; }
     else if(domKey!==startDomKey){
@@ -4318,8 +4949,11 @@ const MAX_BEACON_STEPS = 300;
 function beaconStepSimSeconds(f, simSeconds, tStart){
   let remaining=simSeconds, t=tStart, steps=0;
   const dynMax=simSeconds/MAX_BEACON_STEPS;
+  // ADD124 same cache-seeding fix as stepSimSeconds — start from the clone's known dominant body
+  let cachedDom=f._domBody?domBodyContains(f._domBody,f.pos,t):null;
   while(remaining>1e-6 && steps<MAX_BEACON_STEPS && f.status==='flying'){
-    const dom=findDominantBody(f.pos,t);
+    const dom=cachedDom?(cheapDominantRecheck(cachedDom,f.pos,t)||findDominantBody(f.pos,t)):findDominantBody(f.pos,t);
+    cachedDom=dom;
     const maxDt=domSubstepCap(dom,dynMax);
     const nearest=dom
       ?domSurfaceGap(dom)
@@ -4553,7 +5187,7 @@ el('planetCtxNavBtn').onclick=()=>{
   navPostBurnCoastPath=[];
   hidePlanetCtxMenu();
   if(navDeltaV && navDeltaV.waitSecs>1){
-    showToast('Nav Beacon: optimal burn window for '+navTargetPlanet.name+' found — coast and wait for it.');
+    showToast('Nav Beacon: optimal burn window for '+navTargetPlanet.name+' found - coast and wait for it.');
   } else {
     showToast('Nav Beacon: navigating to '+navTargetPlanet.name+'. Follow the green arrow.');
   }
@@ -4602,6 +5236,7 @@ function trailPointWorldPos(p){
 let _frameCW=0,_frameCH=0; 
 const EDGE_ARROW_MARGIN = 30;
 const EDGE_ARROW_SIZE = 12;
+const PROC_ARROW_MAX_NEAREST = 10;
 let _edgeArrowCW=0,_edgeArrowCH=0;
 function shouldShowEdgeArrows(){
   _edgeArrowCW=flightCanvas.clientWidth; _edgeArrowCH=flightCanvas.clientHeight;
@@ -4646,7 +5281,7 @@ function drawEdgeArrowTo(target){
   fctx.save();
   fctx.font='11px sans-serif';
   fctx.textAlign='center'; fctx.textBaseline='middle';
-  const label=target.name+' — '+fmtDist(target.dist);
+  const label=target.name+' - '+fmtDist(target.dist);
   fctx.lineWidth=3; fctx.strokeStyle='rgba(0,0,0,0.75)'; fctx.strokeText(label,lx,ly);
   fctx.fillStyle=target.color; fctx.fillText(label,lx,ly);
   fctx.restore();
@@ -4656,11 +5291,23 @@ const _shownArrowGroups=new Set();
 function drawEdgeArrows(t){
   if(!shouldShowEdgeArrows()) return;
   _shownArrowGroups.clear();
+  const procStars=[], otherStars=[];
   STAR_BODIES.forEach(st=>{
+    if(isProcHidden(st)) return;
+    if(st.procSeed!=null) procStars.push(st); else otherStars.push(st);
+  });
+  let procToDraw=procStars;
+  if(procStars.length>PROC_ARROW_MAX_NEAREST){
+    procToDraw=procStars.map(st=>{
+      const pos=planetPositionAt(st,t);
+      return {st,d:Math.hypot(pos.x-camera.x,pos.y-camera.y)};
+    }).sort((a,b)=>a.d-b.d).slice(0,PROC_ARROW_MAX_NEAREST).map(e=>e.st);
+  }
+  otherStars.concat(procToDraw).forEach(st=>{
     if(st.arrowGroup){
       if(_shownArrowGroups.has(st.arrowGroup)) return;
       _shownArrowGroups.add(st.arrowGroup);
-      const members=STAR_BODIES.filter(s=>s.arrowGroup===st.arrowGroup);
+      const members=STAR_BODIES.filter(s=>s.arrowGroup===st.arrowGroup&&!isProcHidden(s));
       drawEdgeArrowTo(edgeArrowGroupTarget(members,t,st.arrowGroupLabel));
       return;
     }
@@ -4731,14 +5378,15 @@ function drawOrbitPath(p,t){
   const e=p.ecc;
   const a=p.distance;
   const b=a*Math.sqrt(1-e*e);
-  const cx=parentPos.x-a*e, cy=parentPos.y;
+  const pa=p.periArg||0;
+  const cx=parentPos.x-a*e*Math.cos(pa), cy=parentPos.y-a*e*Math.sin(pa);
   const s=worldToScreen(cx,cy);
   const rx=a/camera.metersPerPixel, ry=b/camera.metersPerPixel;
   // Screen-size based cutoff instead of a fixed metersPerPixel threshold, so tiny moon orbit rails still draw when zoomed in close. this was an annoying bug
   const maxDim=Math.max(_frameCW,_frameCH); 
   if(rx<ORBIT_MIN_PX&&ry<ORBIT_MIN_PX) return; //if too small it isnt worth drawing
   if(rx>maxDim*ORBIT_MAX_PX_MULT) return; //too big just a straight line across teh screen thats also not worth it
-  fctx.beginPath(); fctx.ellipse(s.x,s.y,rx,ry,camera.angle,0,Math.PI*2);
+  fctx.beginPath(); fctx.ellipse(s.x,s.y,rx,ry,camera.angle-pa,0,Math.PI*2);
   fctx.strokeStyle=hexToRgba(p.color,0.3); fctx.lineWidth=1; fctx.stroke();
 }
 
@@ -4844,26 +5492,28 @@ function drawPlanet(p,t,viewerPos){
   fctx.restore();
 }
 
-// Draw a concrete trapezoid launch pad on Earth's surface (outward-from-Sun side)
-const LAUNCH_PAD_DIR=(()=>{
-  const p=planetPositionAt(EARTH,0);
-  const d=Math.hypot(p.x,p.y)||EARTH.distance;
+//launch pad recompute for procedural spawn
+function computeLaunchPadDir(body){
+  const p=planetPositionAt(body,0);
+  const d=Math.hypot(p.x,p.y)||body.distance||1;
   return {x:p.x/d, y:p.y/d};
-})();
+}
+let LAUNCH_PAD_DIR=computeLaunchPadDir(EARTH);
+function recalcLaunchPadDir(){ LAUNCH_PAD_DIR=computeLaunchPadDir(HOME_BODY); }
 function drawLaunchPad(){
-  const earthPos=planetPositionAt(EARTH,simTime);
-  const nx=LAUNCH_PAD_DIR.x; // fixed surface direction — Earth doesn't spin, so this must not track current orbital position
+  const earthPos=planetPositionAt(HOME_BODY,simTime);
+  const nx=LAUNCH_PAD_DIR.x;
   const ny=LAUNCH_PAD_DIR.y;
-  const tx=-ny, ty=nx;          // tangential unit vector
+  const tx=-ny, ty=nx;          
 
-  const PAD_H=LAUNCH_PAD_HEIGHT; // protrudes above surface
-  const PAD_EMBED=4;// embedded below surface
-  const PAD_B=42;   // base width (world units)
-  const PAD_T=28;   // top width (world units)
+  const PAD_H=LAUNCH_PAD_HEIGHT; 
+  const PAD_EMBED=0;
+  const PAD_B=42;   
+  const PAD_T=28;   
 
   // Surface centre of the pad
-  const cx=earthPos.x+nx*EARTH.radius;
-  const cy=earthPos.y+ny*EARTH.radius;
+  const cx=earthPos.x+nx*HOME_BODY.radius;
+  const cy=earthPos.y+ny*HOME_BODY.radius;
 
   // Cull if off-screen or too tiny
   const ps=worldToScreen(cx,cy);
@@ -4974,7 +5624,7 @@ function drawNavArrow(sh){
   if(waitLeft>1){
     const magStr=fmtSpeed(navDeltaV.mag); //format for big numbers (interstellar)
     panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
-      +'Coasting — burn in <b>'+fmtDuration(waitLeft)+'</b>  '
+      +'Coasting - burn in <b>'+fmtDuration(waitLeft)+'</b>  '
       +'(planned Δv: '+magStr+', transfer ~'+tStr+')'
       +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
     panel.style.display='block';
@@ -4984,7 +5634,7 @@ function drawNavArrow(sh){
   // once burn reads done stay done
   if(navBurnDone){
     panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
-      +'<b style="color:#00ff66">On course</b> — burn complete, intercept in ~'+tStr
+      +'<b style="color:#00ff66">On course</b> - burn complete, intercept in ~'+tStr
       +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
     panel.style.display='block';
     return;
@@ -5012,7 +5662,7 @@ function drawNavArrow(sh){
       navPostBurnCoastPath=computeNavPostBurnCoastPath(sh, simTime, arrivalT, navTargetPlanet);
     }
     panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
-      +'<b style="color:#00ff66">On course</b> — burn complete, intercept in ~'+tStr
+      +'<b style="color:#00ff66">On course</b> - burn complete, intercept in ~'+tStr
       +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
     panel.style.display='block';
     return; // no arrow needed — target velocity reached
@@ -5068,7 +5718,7 @@ function drawNavArrow(sh){
 
   // Update the text info panel below the controls bar with live progress.
   panel.innerHTML='<b>Nav → '+navTargetPlanet.name+'</b>  '
-    +'<b>BURN NOW</b> — Δv remaining: <b>'+remStr+'</b> ('+pctDone.toFixed(0)+'% done)  intercept in ~'+tStr
+    +'<b>BURN NOW</b> - Δv remaining: <b>'+remStr+'</b> ('+pctDone.toFixed(0)+'% done)  intercept in ~'+tStr
     +'  <span style="font-size:10px;opacity:.7">[click planet again to recompute]</span>';
   panel.style.display='block';
 }
@@ -5185,6 +5835,7 @@ function nearestStarForBody(p,t){
   const ppos=planetPositionAt(p,t);
   let best=STAR_BODIES[0],bestD=Infinity;
   STAR_BODIES.forEach(st=>{
+    if(isProcHidden(st)) return;
     const sp=planetPositionAt(st,t);
     const d=Math.hypot(sp.x-ppos.x,sp.y-ppos.y);
     if(d<bestD){ bestD=d; best=st; }
@@ -5213,15 +5864,19 @@ const OVERLAP_CULL_PX = 3;
 // low timewarp lagfix by caching ez
 let _cullCacheKey=null, _cullCacheResult=null;
 function cullOverlappingBodies(){
-  const key=camera.x+','+camera.y+','+camera.angle+','+camera.metersPerPixel+','+Math.floor(simTime);
+  const px=Math.round(camera.x/camera.metersPerPixel/OVERLAP_CULL_PX);
+  const py=Math.round(camera.y/camera.metersPerPixel/OVERLAP_CULL_PX);
+  const angleBucket=Math.round(camera.angle*100);
+  const key=px+','+py+','+angleBucket+','+camera.metersPerPixel+','+Math.floor(simTime);
   if(key===_cullCacheKey) return _cullCacheResult;
   _cullCacheKey=key;
-  const items=ALL_BODIES.map(b=>{
+  const visible=ALL_BODIES.filter(b=>!isProcHidden(b));
+  const items=visible.map(b=>{
     const pos=planetPositionAt(b,simTime);
     const s=worldToScreen(pos.x,pos.y);
     return {b,x:s.x,y:s.y};
   });
-  const keep=new Set(ALL_BODIES);
+  const keep=new Set(visible);
   for(let i=0;i<items.length;i++){
     const a=items[i];
     if(!keep.has(a.b)) continue;
@@ -5247,7 +5902,7 @@ function render(){
   let bgR=20,bgG=20,bgB=20; // default near-black space
   if(activeSh){
     for(const p of PLANETS){
-      if(!p.atmo||!p.atmoColor) continue;
+      if(!p.atmo||!p.atmoColor||isProcHidden(p)) continue;
       const density=getAtmoDensity(activeSh.pos,p);
       if(density>0){
         const ppos=planetPositionAt(p,simTime);
@@ -5286,10 +5941,10 @@ function render(){
     fctx.restore();
   }
 
-  STAR_BODIES.forEach(st=>drawOrbitPath(st,simTime));
-  PLANETS.forEach(p=>drawOrbitPath(p,simTime));
-  STAR_BODIES.forEach(st=>drawSOICircle(st,simTime)); //more stars support.
-  PLANETS.forEach(p=>drawSOICircle(p,simTime));
+  STAR_BODIES.forEach(st=>{ if(!isProcHidden(st)) drawOrbitPath(st,simTime); });
+  PLANETS.forEach(p=>{ if(!isProcHidden(p)) drawOrbitPath(p,simTime); });
+  STAR_BODIES.forEach(st=>{ if(!isProcHidden(st)) drawSOICircle(st,simTime); }); //more stars support.
+  PLANETS.forEach(p=>{ if(!isProcHidden(p)) drawSOICircle(p,simTime); });
   drawAsteroidTrajectories();
   drawAsteroidSOICircles();
   const visibleBodies=cullOverlappingBodies();
@@ -5317,7 +5972,7 @@ function render(){
       const alt=Math.hypot(sh.pos.x-ppos.x,sh.pos.y-ppos.y)-bodySurfaceRadius(sh._domBody,sh.pos.x-ppos.x,sh.pos.y-ppos.y);
       hud.altLabel.textContent='Alt ('+sh._domBody.name+')';
       hud.alt.textContent=fmtDist(alt);
-      hud.soi.textContent=sh._domBody.name+(sh._inAtmo?' — atmosphere':'');
+      hud.soi.textContent=sh._domBody.name+(sh._inAtmo?' - atmosphere':'');
     } else {
       const speed=Math.hypot(sh.vel.x,sh.vel.y);
       hud.speed.textContent=fmtSpeed(speed);
@@ -5333,7 +5988,7 @@ function render(){
   } else {
     hud.speed.textContent='0 u/s'; hud.alt.textContent='-'; hud.altS.textContent='-';
     hud.soi.textContent='-'; hud.fuel.textContent='0%';
-    hud.status.textContent=ships.length?'':'No active ship — build and launch, or select one from the list.';
+    hud.status.textContent=ships.length?'':'No active ship - build and launch, or select one from the list.';
     hud.status.className='';
   }
 }
@@ -5572,11 +6227,13 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     this.targetGains={atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,sgrA:0,build:0,signal:0}; 
     this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfMoonEurofunk=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfSgrA=0; this.tfBuild=0; this.tfSignal=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
+    this.semitones={interplanetary:0,soi:0,nightVision:0,tauCeti:0,sgrA:0,signal:0};
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
         this.targetGains={atmo:0,interplanetary:0,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,sgrA:0,build:0,signal:0}; 
         this.targetGains[d.value]=1;
+        if(d.semitone!==undefined&&Object.prototype.hasOwnProperty.call(this.semitones,d.value)) this.semitones[d.value]=d.semitone;
       }
     };
   }
@@ -5585,7 +6242,9 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rMoonEurofunk=53140/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rSgrA=42782.78/sampleRate, rBuild=56000/sampleRate, rSignal=44100/sampleRate;
+    const SEMI=1.059463094;
+    const mult=s=>SEMI**s;
+    const rAtmo=32000/sampleRate, rInter=48000*mult(this.semitones.interplanetary)/sampleRate, rSoi=48000*mult(this.semitones.soi)/sampleRate, rMoonEurofunk=53140/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100*mult(this.semitones.nightVision)/sampleRate, rTauCeti=36000*mult(this.semitones.tauCeti)/sampleRate, rSgrA=42782.78*mult(this.semitones.sgrA)/sampleRate, rBuild=56000/sampleRate, rSignal=44100*mult(this.semitones.signal)/sampleRate;
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
@@ -5670,19 +6329,32 @@ function currentMusicState(){
   }
   return 'interplanetary';
 }
+//Semitone offset for the procedural song
+function currentMusicSemitone(){
+  const sh=activeShip();
+  if(sh&&sh.status==='flying'){
+    const b=sh._domBody;
+    if(b&&b.musicTheme!==undefined && !(b.musicUsesAtmo&&sh._inAtmo)) return b.musicSemitone||0;
+  }
+  return 0;
+}
 const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',moonEurofunk:'Mooneurofunk',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',sgrA:'Sight Of The Radiant Shine',build:'Assembly Line',signal:'Signal of Distress'};
+let musicLastSemitone=0;
 function updateMusicState(){
   if(!musicNode&&!musicFallbackState) return;
   const st=currentMusicState();
-  if(st!==musicLastState){
-    musicLastState=st;
-    if(SONG_NAMES[st]) showToast('Song Playing: '+SONG_NAMES[st]);
+  const semitone=currentMusicSemitone();
+  const stateChanged=st!==musicLastState;
+  if(stateChanged||semitone!==musicLastSemitone){
+    if(stateChanged&&SONG_NAMES[st]) showToast('Song Playing: '+SONG_NAMES[st]);
+    musicLastState=st; musicLastSemitone=semitone;
     if(musicNode){
-      musicNode.port.postMessage({type:'state',value:st});
+      musicNode.port.postMessage({type:'state',value:st,semitone});
     }else if(musicFallbackState){
       const tg=musicFallbackState.targetGains;
       tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.moonEurofunk=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.sgrA=0; tg.build=0; tg.signal=0;
       tg[st]=1;
+      if(musicFallbackState.semitones&&Object.prototype.hasOwnProperty.call(musicFallbackState.semitones,st)) musicFallbackState.semitones[st]=semitone;
     }
   }
 }
@@ -5725,15 +6397,13 @@ function startMusicEngineFallback(){
       tfAtmo:0,tfInter:0,tfSoi:0,tfMoonEurofunk:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfSgrA:0,tfBuild:0,tfSignal:0,
       fadeStep:1/(FADE_SECONDS*sr),
       vol:musicVolume,
+      semitones:{interplanetary:0,soi:0,nightVision:0,tauCeti:0,sgrA:0,signal:0},
     };
     musicFallbackState=st;
-    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rMoonEurofunk=53140/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rSgrA=42782.78/sr, rBuild=56000/sr, rSignal=44100/sr;
-    // ScriptProcessorNode runs on the main thread (unlike AudioWorkletNode, our primary path above,
-    // which has its own realtime thread), so it competes with physics/render for CPU time. A bigger
-    // buffer only delays underruns, it can't prevent them - when the main thread does stall long enough,
-    // the callback is late, output silently drops to 0, and the jump back to the waveform is the click.
+    const SEMI=1.059463094;
+    const rAtmoBase=32000, rInterBase=48000, rMoonEurofunkBase=53140, rInterstellarBase=48000, rBuildBase=56000;
     musicScriptNode=musicCtx.createScriptProcessor(16384,0,2);
-    const declickSamples=Math.round(sr*0.008); // added basically prevents static crap from lag
+    const declickSamples=Math.round(sr*0.008); //added basically prevents static crap from lag
     st.lastCallbackTime=null;
     musicScriptNode.onaudioprocess=(e)=>{
       const now=performance.now();
@@ -5743,6 +6413,8 @@ function startMusicEngineFallback(){
       st.lastCallbackTime=now;
       const L=e.outputBuffer.getChannelData(0), R=e.outputBuffer.getChannelData(1);
       const volStep=1/(0.05*sr); 
+      const rAtmo=rAtmoBase/sr, rInter=rInterBase*SEMI**st.semitones.interplanetary/sr, rMoonEurofunk=rMoonEurofunkBase/sr, rInterstellar=rInterstellarBase/sr, rBuild=rBuildBase/sr;
+      const rSoi=48000*SEMI**st.semitones.soi/sr, rNightVision=44100*SEMI**st.semitones.nightVision/sr, rTauCeti=36000*SEMI**st.semitones.tauCeti/sr, rSgrA=42782.78*SEMI**st.semitones.sgrA/sr, rSignal=44100*SEMI**st.semitones.signal/sr;
       for(let i=0;i<L.length;i++){
         const declick=stalled&&i<declickSamples?i/declickSamples:1;
         if(st.vol<musicVolume) st.vol=Math.min(musicVolume,st.vol+volStep);
@@ -5832,6 +6504,28 @@ if(volSliderEl){
     if(volIconEl) volIconEl.textContent=pct===0?'🔇':(pct<50?'🔉':'🔊');
     if(!musicCtx) startMusicEngine();
   });
+}
+
+// Float-origin thing prevent precision loss at big number scary
+// Universe moves instead. Ship is technically at 0,0
+function shiftAnchors(dx,dy){
+  STAR_SYSTEMS.forEach(sys=>{ sys.anchorPos.x-=dx; sys.anchorPos.y-=dy; });
+  ALL_BODIES.forEach(b=>{ b._posCacheT=null; b._velCacheT=null; });
+}
+function recenterOrigin(dx,dy){
+  if(!dx&&!dy) return; // ADD123 nothing to do — avoids touching every array on a frame where the ship didn't move
+  shiftAnchors(dx,dy);
+  ships.forEach(s=>{
+    s.pos.x-=dx; s.pos.y-=dy;
+    if(s.trail) s.trail.forEach(p=>{ p.x-=dx; p.y-=dy; });
+  });
+  asteroids.forEach(a=>{ a.pos.x-=dx; a.pos.y-=dy; });
+  camera.x-=dx; camera.y-=dy;
+  navBeaconPath.forEach(p=>{ p.x-=dx; p.y-=dy; });
+  navPlanCoastPath.forEach(p=>{ p.x-=dx; p.y-=dy; });       
+  navPostBurnCoastPath.forEach(p=>{ p.x-=dx; p.y-=dy; });  
+  if(navDeltaV&&navDeltaV.burnPos){ navDeltaV.burnPos.x-=dx; navDeltaV.burnPos.y-=dy; }
+  originOffset.x+=dx; originOffset.y+=dy;
 }
 
 function loop(now){
@@ -5991,7 +6685,8 @@ function loopInner(now){
     }
   }
 
-  // camera follows active ship; rotates to heading only if camRotate cheat is on; free-cam overrides
+  if(sh) recenterOrigin(sh.pos.x,sh.pos.y);
+
   if(sh&&sh.status!=='crashed'&&!camFree){
     camera.x=sh.pos.x;
     camera.y=sh.pos.y;
@@ -6024,7 +6719,7 @@ function loopInner(now){
   // nav beacon mark navigation complete soi
   if(cheats.navBeacon&&navTargetPlanet&&sh&&sh.status==='flying'
      &&sh._domBody===navTargetPlanet){
-    showToast('Nav Beacon: entered '+navTargetPlanet.name+'\u2019s sphere of influence — autopilot disengaged.');
+    showToast('Nav Beacon: entered '+navTargetPlanet.name+'\u2019s sphere of influence - autopilot disengaged.');
     navTargetPlanet=null; navDeltaV=null; navBurnWarpDropped=false; navBurnTargetVel=null;
     navPlanCoastPath=[]; navBurnDone=false; navPostBurnCoastPath=[];
     el('navArrowPanel').style.display='none';
@@ -6033,7 +6728,7 @@ function loopInner(now){
   // nav beacon detect missed intercept clear
   if(cheats.navBeacon&&navBurnDone&&navDeltaV&&sh&&sh.status==='flying'
      &&simTime>=navDeltaV.burnSimTime+navDeltaV.interceptT){
-    showToast('Nav Beacon: intercept with '+(navTargetPlanet?navTargetPlanet.name:'target')+' missed — plan cleared.');
+    showToast('Nav Beacon: intercept with '+(navTargetPlanet?navTargetPlanet.name:'target')+' missed - plan cleared.');
     navTargetPlanet=null; navDeltaV=null; navBurnWarpDropped=false; navBurnTargetVel=null;
     navPlanCoastPath=[]; navBurnDone=false; navPostBurnCoastPath=[];
     el('navArrowPanel').style.display='none';
@@ -6057,7 +6752,7 @@ function loopInner(now){
   }
 
   frameCount++;
-  if(frameCount%60===0){ saveShips(); saveSettings(); }
+  if(frameCount%60===0){ saveShips(); saveSettings(); saveProceduralSystems(); saveAsteroids(); }
 
   if(el('flightScreen').classList.contains('active')){
     render();
@@ -6066,6 +6761,9 @@ function loopInner(now){
   }
 }
 window.addEventListener('resize',()=>{ drawGrid(); positionShipList(); });
+
+loadProceduralSystems();
+loadAsteroids();
 
 // ---------- Restore flying ships from previous session ----------
 let pendingRestoredFlight=false;
@@ -6155,6 +6853,32 @@ window.addEventListener('keydown',e=>{
     if(devComboProgress===DEV_COMBO.length){ devComboProgress=0; toggleDevTool(); }
   } else {
     devComboProgress=(k===DEV_COMBO[0])?1:0;
+  }
+});
+
+function addRandomProceduralSystems(count){
+  proceduralMode=true;
+  el('procPlanetsToggle').checked=true;
+  el('procSeedRow').style.display='flex';
+  el('procSpawnRow').style.display='flex';
+  el('procLimitRow').style.display='flex';
+  el('procPlanetsSub').textContent='On. Procedural systems are added to the galaxy';
+  for(let i=0;i<count;i++){ getOrBuildProceduralSystem(randomSeedValue()); }
+  updateProcSeedPreview();
+  saveProceduralSystems();
+  showToast('Cheat: added '+count+' procedural systems.');
+}
+const PLANETS_COMBO=atob('cGxhbmV0cw==').split('');
+let planetsComboProgress=0;
+window.addEventListener('keydown',e=>{
+  const tag=document.activeElement&&document.activeElement.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+  const k=e.key.toLowerCase();
+  if(k===PLANETS_COMBO[planetsComboProgress]){
+    planetsComboProgress++;
+    if(planetsComboProgress===PLANETS_COMBO.length){ planetsComboProgress=0; addRandomProceduralSystems(50); }
+  } else {
+    planetsComboProgress=(k===PLANETS_COMBO[0])?1:0;
   }
 });
 
