@@ -4712,9 +4712,13 @@ function drawStar(body,t){
       fctx.beginPath(); fctx.arc(0,0,atmoR,0,Math.PI*2); fctx.fillStyle=glow; fctx.fill();
     }
   }
-  const grad=getStarBodyGradient(body,rq);
-  fctx.beginPath(); fctx.arc(0,0,r,0,Math.PI*2); fctx.fillStyle=grad; fctx.fill();
-  if(r>2){ fctx.lineWidth=1; fctx.strokeStyle='rgba(255,255,255,0.12)'; fctx.stroke(); }
+  if(body===SAGITTARIUS_A){
+    fctx.beginPath(); fctx.arc(0,0,r,0,Math.PI*2); fctx.fillStyle='#000000'; fctx.fill();
+  } else {
+    const grad=getStarBodyGradient(body,rq);
+    fctx.beginPath(); fctx.arc(0,0,r,0,Math.PI*2); fctx.fillStyle=grad; fctx.fill();
+  }
+  if(r>2&&body!==SAGITTARIUS_A){ fctx.lineWidth=1; fctx.strokeStyle='rgba(255,255,255,0.12)'; fctx.stroke(); }
   if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText(body.name,r+4,4); }
   fctx.restore();
 }
@@ -5723,7 +5727,7 @@ function startMusicEngineFallback(){
       vol:musicVolume,
     };
     musicFallbackState=st;
-    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rMoonEurofunk=53140/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rSgrA=8000/sr, rBuild=56000/sr, rSignal=44100/sr;
+    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rMoonEurofunk=53140/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rSgrA=42782.78/sr, rBuild=56000/sr, rSignal=44100/sr;
     // ScriptProcessorNode runs on the main thread (unlike AudioWorkletNode, our primary path above,
     // which has its own realtime thread), so it competes with physics/render for CPU time. A bigger
     // buffer only delays underruns, it can't prevent them - when the main thread does stall long enough,
