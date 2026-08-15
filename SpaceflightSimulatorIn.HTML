@@ -333,7 +333,7 @@
           <button class="menu-btn primary" id="menuPlayBtn">Play!</button>
           <div class="menu-settings-row">
             <button class="menu-btn secondary" id="darkModeBtn">🌙 Dark Mode</button>
-            <label class="menu-toggle-row" for="cheatsMasterToggle">
+            <label class="menu-toggle-row" for="cheatsMasterToggle" id="cheatsToggleRow">
               <input type="checkbox" id="cheatsMasterToggle">
               <span>Enable Cheats</span>
             </label>
@@ -462,6 +462,10 @@
           <input type="checkbox" id="cheatTypeEdit">
           <label for="cheatTypeEdit">TypeEdit (edit Telemetry)</label>
         </div>
+        <div class="cheat-row">
+          <input type="checkbox" id="cheatIndestructible">
+          <label for="cheatIndestructible">Indestructible</label>
+        </div>
         <div class="cheat-row" style="flex-direction:column;align-items:stretch;gap:4px;">
           <label for="cheatTeleport">Teleport to planet</label>
           <select id="cheatTeleport" style="width:100%;background:var(--bg);color:var(--primary);border:1px solid var(--primary);font-size:11px;padding:4px;">
@@ -523,18 +527,41 @@ function loadSettings(){
   try{ const raw=localStorage.getItem(SETTINGS_KEY); return raw?JSON.parse(raw):{}; }catch(err){ return {}; }
 }
 let cheatsEnabled=false;
+let totalPlaySeconds=0;
+let devUnlocked=false;
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({darkMode:document.body.classList.contains('dark-mode'), cheatsEnabled})); }catch(err){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({darkMode:document.body.classList.contains('dark-mode'), cheatsEnabled, totalPlaySeconds, devUnlocked})); }catch(err){}
 }
 function applyCheatsVisibility(){
   document.body.classList.toggle('cheats-disabled', !cheatsEnabled);
+}
+function updateCheatsToggleRowVisibility(){
+  el('cheatsToggleRow').style.display=(devUnlocked||totalPlaySeconds>=600)?'flex':'none';
 }
 const _savedSettings=loadSettings();
 if(_savedSettings.darkMode) document.body.classList.add('dark-mode');
 el('darkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️ Light Mode':'🌙 Dark Mode';
 cheatsEnabled=!!_savedSettings.cheatsEnabled;
+totalPlaySeconds=typeof _savedSettings.totalPlaySeconds==='number'?_savedSettings.totalPlaySeconds:0;
+devUnlocked=!!_savedSettings.devUnlocked;
 el('cheatsMasterToggle').checked=cheatsEnabled;
 applyCheatsVisibility();
+updateCheatsToggleRowVisibility();
+const DEV_CODE_B64='dW5sb2NrY2hlYXRz';
+let _devCodeBuf='';
+window.addEventListener('keydown',e=>{
+  const tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(tag==='INPUT'||tag==='TEXTAREA') return;
+  if(e.key.length!==1) return;
+  _devCodeBuf=(_devCodeBuf+e.key).slice(-64);
+  let decoded='';
+  try{ decoded=atob(DEV_CODE_B64); }catch(err){}
+  if(decoded&&_devCodeBuf.toLowerCase().endsWith(decoded.toLowerCase())){
+    devUnlocked=true;
+    updateCheatsToggleRowVisibility();
+    saveSettings();
+  }
+});
 
 el('darkModeBtn').onclick=()=>{
   const dark=document.body.classList.toggle('dark-mode');
@@ -574,7 +601,7 @@ const ORBIT_YEAR_SECONDS = 31557600;
 // GM_SUN = 4*pi^2*AU^3/year^2 * 150 (150x scales the sun's gravity up for gameplay pacing), evaluated
 const GM_SUN = 19908468035775750;
 // gameplay drag exponential velocity decay from
-const ATMO_DRAG_K = 0.0005;
+const ATMO_DRAG_K = 0.000375;
 const PARACHUTE_DRAG_MULT = 40;
 const GAS_GIANT_CRUSH_DEPTH = 0.4;
 const WARP_LEVELS = [0,0.1,0.5,1,2,3,5,25,100,1000,10000,100000,1000000,100000000]; //new warp levels bc landing on tiny little moons is hard at 1x
@@ -582,6 +609,7 @@ const MAX_CONTROL_WARP = 3;
 // orbit ellipses drawn their screen size
 const ORBIT_MIN_PX = 4; //smallest screen before orbit lines are drawn on screen
 const ORBIT_MAX_PX_MULT = 50; //if it is too big it wont get drawn
+const ATMO_GLOW_MAX_PX_MULT = 6; //atmo glow circle skipped once its this many screens wide, stops the huge-atmo flicker when zoomed in close
 const ATMO_ZOOM_REF_THICKNESS = 45000; 
 const ATMO_ZOOM_ENTER_MPP_REF = 30;  
 const ATMO_ZOOM_MAX_MPP_REF  = 50;   
@@ -591,6 +619,8 @@ function atmoZoomMaxMpp(p){ return Math.max(8,atmoThickness(p)/ATMO_ZOOM_REF_THI
 const MOUSE_PULL_ACCEL = 1500;   // acceleration from the mouse-pull cheat (u/s²)
 // Launch pad height above surface — shared by launch() and drawLaunchPad() so they can't drift apart
 const LAUNCH_PAD_HEIGHT = 8;
+
+// rearrange all celestial definitions into one place because the fragmented shit was stupid
 
 // solar system gameplay scaled radii distances
 const PLANET_DEFS = [
@@ -606,7 +636,6 @@ const PLANET_DEFS = [
 ];
 
 // Moons are calculated based on the home planet multiplicatively. I dont know why I did it this specific way. Claude could've doneit better probably. Its all not standard but makes sense to me. Sorry modders.
-let moonAngleSeed=0;
 const MOON_DEFS = [
   {key:'moon',    name:'The Moon',parent:'earth',  color:'#bdbdbd',groundColor:'#9a9a9a',radiusMod:0.27240,distMod:30.15, surfG:1.62,  eccMod:0.94510,solid:true,atmo:false}, //moon dist unrealistic. I know. i halved it for gameplay reasons
 
@@ -642,9 +671,34 @@ const MOON_DEFS = [
   {key:'hydra',   name:'Hydra',   parent:'pluto',color:'#989898',groundColor:'#787878',radiusMod:0.02314,distMod:54.5, surfG:0.003,eccMod:0.99410,solid:true,atmo:false},
 ];
 
-//Sun is root and has no parent. so i made it null. 
-const SUN_BODY = {key:'sun',name:'Sun',parent:null,radius:SUN_RADIUS,color:'#ffb020',GM:GM_SUN,GMbase:GM_SUN,solid:false,atmo:false};
-const BODIES_BY_KEY = {sun:SUN_BODY};
+// copy same shape as PLANET_DEFS/MOON_DEFS above — orbit their own star via distAU
+const PROXIMA_PLANET_DEFS = [
+  {key:'proximaD', name:'Proxima Centauri d', color:'#8a7060', groundColor:'#6d5748', radius:243000, surfG:8.9, distAU:0.0100, solid:true, atmo:false, eccMod:0.99},
+  {key:'proximaB', name:'Proxima Centauri b', color:'#9c7a5c', groundColor:'#7a5f47', radius:309000, surfG:11.3, distAU:0.0165, solid:true, atmo:true, atmoFrac:0.2, atmoColor:'#a88f77', eccMod:0.99},
+];
+const TAU_CETI_PLANET_DEFS = [
+  {key:'tauCetiG',name:'Tau Ceti g',parent:'tauCeti',color:'#3a2a1e',groundColor:'#2a1c13',radius:720000,surfG:13.2,distAU:0.52,solid:true,atmo:false,eccMod:0.94},
+  {key:'tauCetiH',name:'Tau Ceti h',parent:'tauCeti',color:'#b8552a',groundColor:'#9c4a24',radius:714000,surfG:13.1,distAU:0.96,solid:true,atmo:true, atmoFrac:0.2, atmoColor:'#c97b4a',eccMod:0.23},
+  {key:'tauCetiE',name:'Tau Ceti e',parent:'tauCeti',color:'#dbd9a3',groundColor:'#9da868',radius:1080000,surfG:19.8,distAU:2.2,solid:true,atmo:true, atmoFrac:0.52,atmoColor:'#e6e2b8',eccMod:0.82},
+  {key:'tauCetiF',name:'Tau Ceti f',parent:'tauCeti',color:'#2d5fae',groundColor:'#cfe3ea',radius:1086000,surfG:19.9,distAU:5.32,solid:true,atmo:true, atmoFrac:0.36,atmoColor:'#7fa8c9',eccMod:0.84},
+];
+const GLIESE876_PLANET_DEFS = [
+  {key:'gliese876D',name:'Gliese 876 d',parent:'gliese876',color:'#6b1a1a',groundColor:'#4a1414',radius:371250, surfG:17,distAU:0.396,solid:true, atmo:true, atmoFrac:3.64,atmoColor:'#cc6633',eccMod:0.965, atmoWarpCap:100}, //gliese d atmo is huge, needs its own cap
+  {key:'gliese876C',name:'Gliese 876 c',parent:'gliese876',color:'#4a6f57',groundColor:null,     radius:2520000,surfG:40,distAU:2.448,solid:false,atmo:true,               atmoColor:'#3a2e28',eccMod:0.743},
+  {key:'gliese876B',name:'Gliese 876 b',parent:'gliese876',color:'#2e3446',groundColor:null,     radius:2587500,surfG:52,distAU:3.924,solid:false,atmo:true,               atmoColor:'#332a66',eccMod:0.966},
+  {key:'gliese876E',name:'Gliese 876 e',parent:'gliese876',color:'#6fe0d4',groundColor:null,     radius:855000, surfG:20,distAU:6.012,solid:false,atmo:true,               atmoColor:'#3fa8ac',eccMod:0.970},
+];
+
+const BODIES_BY_KEY = {};
+const STAR_BODIES = [];
+const PLANETS = [];
+const ALL_BODIES = [];
+// sync
+function registerBody(body){ BODIES_BY_KEY[body.key]=body; ALL_BODIES.push(body); return body; }
+// stars
+function registerStar(body){ registerBody(body); STAR_BODIES.push(body); return body; }
+// planets
+function registerPlanet(body){ registerBody(body); PLANETS.push(body); return body; }
 
 function eccFromMod(mod){
   return Math.min(0.995,Math.max(0,1-(mod===undefined?1:mod)));
@@ -657,178 +711,145 @@ function solveKepler(M,e){
   return E;
 }
 
-const TOP_LEVEL_PLANETS = PLANET_DEFS.map((p,i)=>{
-  const distance = p.distAU*AU;
-  const GM = p.surfG*p.radius*p.radius*10; // 10x boosts planet gravity wells so they're escapable at gameplay speeds
-  const GMbase = p.surfG*p.radius*p.radius; // excludes the 10x GM boost — keeps SOI size stable regardless of boosted gravity
-  const periodSimSeconds = (p.periodDays/365.25)*ORBIT_YEAR_SECONDS/Math.sqrt(10); // /sqrt(10) is artificial pacing, independent of the sun's 150x gravity boost
-  const omega = 2*Math.PI/periodSimSeconds;
-  const initialAngle = (i/PLANET_DEFS.length)*Math.PI*2;
-  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*GM_SUN))*0.4); // 0.4 is extra scale on top of the Hill-sphere formula, independent of gravity above
-  const ecc = eccFromMod(p.eccMod);
-  const body = Object.assign({},p,{distance,GM,GMbase,omega,initialAngle,soi,ecc});
-  BODIES_BY_KEY[body.key]=body;
-  return body;
-});
+function hillSOI(radius,GMbase,distance,parentGM,tuning){
+  tuning = tuning || {};
+  const soiHillScale = tuning.soiHillScale!==undefined ? tuning.soiHillScale : 0.4;
+  const soiHillDivisor = tuning.soiHillDivisor!==undefined ? tuning.soiHillDivisor : 3;
+  const soiExtraMult = tuning.soiExtraMult!==undefined ? tuning.soiExtraMult : 1;
+  return Math.max(radius*3, distance*Math.cbrt(GMbase/(soiHillDivisor*parentGM))*soiHillScale)*soiExtraMult;
+}
 
-//Moon math is anchored to planet like how planets anchor to sun
-const MOONS = MOON_DEFS.map(m=>{
-  const parent=BODIES_BY_KEY[m.parent];
-  const radius = m.radiusMod*parent.radius;
-  const distance = m.distMod*parent.radius;
-  const GMbase = m.surfG*radius*radius;
-  const GM = GMbase*10; // 10x boosts planet gravity wells so they're escapable at gameplay speeds
-  const omega = Math.sqrt(parent.GM/(distance*distance*distance));
-  const initialAngle = (moonAngleSeed++%7)/7*Math.PI*2;
-  const soi = Math.max(radius*3, distance*Math.cbrt(GMbase/(3*parent.GM))*0.4)*2.5; //0.4 Hill-sphere scale, *2.5 extra moon-only SOI boost since moon SOIs were too tight to fly in otherwise
-  const ecc = eccFromMod(m.eccMod);
-  const body = Object.assign({},m,{radius,distance,GM,GMbase,omega,initialAngle,soi,ecc});
-  BODIES_BY_KEY[body.key]=body;
-  return body;
-});
+// Better than before i guess. Every object goes in here for building
+let moonAngleSeed=0;
+function deriveOrbitingBody(def, parent, index, total, tuning){
+  tuning = tuning || {};
+  const gmBoost = tuning.gmBoost!==undefined ? tuning.gmBoost : 10; // boosts gravity wells so they're escapable at gameplay speeds
+
+  const radius = def.radius!==undefined ? def.radius : def.radiusMod*parent.radius;
+  const distance = def.distAU!==undefined ? def.distAU*AU : def.distMod*parent.radius;
+  const GMbase = def.surfG*radius*radius;
+  const GM = GMbase*gmBoost;
+  const omega = def.periodDays!==undefined
+    ? (2*Math.PI)/((def.periodDays/365.25)*ORBIT_YEAR_SECONDS/Math.sqrt(gmBoost)) // artificial pacing, independent of the gravity boost above
+    : Math.sqrt(parent.GM/(distance*distance*distance)); // real orbital rate off the parent's GM
+  const initialAngle = tuning.angleSeed!==undefined ? tuning.angleSeed : (index/total)*Math.PI*2;
+  const soi = hillSOI(radius,GMbase,distance,parent.GM,tuning);
+  const ecc = eccFromMod(def.eccMod);
+  const body = Object.assign({},def,{parent:def.parent||parent.key,radius,distance,GM,GMbase,omega,initialAngle,soi,ecc});
+  if(tuning.musicTheme!==undefined && body.musicTheme===undefined) body.musicTheme=tuning.musicTheme;
+  if(tuning.musicUsesAtmo!==undefined && body.musicUsesAtmo===undefined) body.musicUsesAtmo=tuning.musicUsesAtmo;
+  return registerPlanet(body);
+}
+// Planets
+function buildPlanets(defs, star, tuning){
+  return defs.map((p,i)=>deriveOrbitingBody(p, star, i, defs.length, tuning));
+}
+// Moons (in this order)
+function buildMoons(defs, tuning){
+  return defs.map(m=>deriveOrbitingBody(m, BODIES_BY_KEY[m.parent], 0, 1,
+    Object.assign({},tuning,{angleSeed:(moonAngleSeed++%7)/7*Math.PI*2})));
+}
+
+const SUN_BODY = registerStar({key:'sun',name:'Sun',parent:null,radius:SUN_RADIUS,color:'#ffb020',GM:GM_SUN,GMbase:GM_SUN,solid:false,atmo:false});
+const TOP_LEVEL_PLANETS = buildPlanets(PLANET_DEFS, SUN_BODY, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:3, soiExtraMult:1});
+const MOONS = buildMoons(MOON_DEFS, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:3, soiExtraMult:2.5, musicTheme:'moonEurofunk'}); //2.5 extra moon-only SOI boost since moon SOIs were too tight to fly in otherwise. moonEurofunk theme plays through every moon SOI
+const MOON_KEY_SET = new Set(MOONS.map(m=>m.key)); // ignore moon asteroid
 
 //i made sun SOI not infinity so i can add Alpha Centauri later.
 SUN_BODY.soi = 3.5*BODIES_BY_KEY['pluto'].distance;
 
-//planets now got moons so update this
-const PLANETS = [...TOP_LEVEL_PLANETS, ...MOONS];
-// STAR_BODIES is its own array so Alpha Centauri can be appended later without touching downstream code
-const STAR_BODIES = [SUN_BODY];
-//everybody includes the sun though.
-const ALL_BODIES = [...STAR_BODIES, ...PLANETS];
+// fix
+const STAR_SYSTEMS = [];
+function registerStarSystem(sys){ STAR_SYSTEMS.push(sys); return sys; }
 
-// add alpha centauri anchor
-
-const ALPHA_CEN_SYSTEM_DIST_AU = 1110; 
-const ALPHA_CEN_SYSTEM_Y_AU = 254; 
+const ALPHA_CEN_SYSTEM_DIST_AU = 1110;
+const ALPHA_CEN_SYSTEM_Y_AU = 254;
 const ALPHA_CEN_ANCHOR_POS = {x:ALPHA_CEN_SYSTEM_DIST_AU*AU, y:ALPHA_CEN_SYSTEM_Y_AU*AU};
 
 //Gravity vals
-const GM_ALPHA_CEN_A = 1.100*GM_SUN;              
-const GM_ALPHA_CEN_B = 0.907*GM_SUN;              
-const GM_ALPHA_CEN_AB = GM_ALPHA_CEN_A+GM_ALPHA_CEN_B; 
-const GM_PROXIMA = 0.122*GM_SUN;           
+const GM_ALPHA_CEN_A = 1.100*GM_SUN;
+const GM_ALPHA_CEN_B = 0.907*GM_SUN;
+const GM_ALPHA_CEN_AB = GM_ALPHA_CEN_A+GM_ALPHA_CEN_B;
+const GM_PROXIMA = 0.122*GM_SUN;
 
-//Barycenter calculation. Invisible
+//Barycenter calculation. Invisible.
 const AC_ANCHOR = {key:'ac_anchor', name:'Alpha Centauri Barycenter', parent:null, pos:ALPHA_CEN_ANCHOR_POS, radius:0, solid:false, atmo:false};
 BODIES_BY_KEY['ac_anchor']=AC_ANCHOR;
 
 // use pre existing shit to alpha centauri binary
 const ALPHA_CEN_AB_DIST_AU = 23.7;
 const ALPHA_CEN_AB_DISTANCE = ALPHA_CEN_AB_DIST_AU*AU;
-const ALPHA_CEN_AB_ECC = 0.518;      
+const ALPHA_CEN_AB_ECC = 0.518;
 const ALPHA_CEN_AB_OMEGA = Math.sqrt(GM_ALPHA_CEN_AB/Math.pow(ALPHA_CEN_AB_DISTANCE,3));
 
-const ALPHA_CEN_A = {
+const ALPHA_CEN_A = registerStar({
   key:'alphaCenA', name:'Alpha Centauri A (Rigil Kentaurus)',
   parent:'alphaCenB', binaryMirror:true, //uses binary mirror function. epic
-  color:'#fff3d6', groundColor:null,    
+  color:'#fff3d6', groundColor:null,
   radius:SUN_RADIUS*2.44,
   GM:GM_ALPHA_CEN_A, GMbase:GM_ALPHA_CEN_A,
-  solid:false, atmo:false,
+  solid:false, atmo:false, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri',
   distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
-  soi:251674503417.04407, 
-};
-const ALPHA_CEN_B = {
+  soi:251674503417.04407,
+});
+const ALPHA_CEN_B = registerStar({
   key:'alphaCenB', name:'Alpha Centauri B (Toliman)',
-  parent:'alphaCenA', barycenterParent:'ac_anchor', 
-  color:'#ffb347', groundColor:null,     
-  radius:SUN_RADIUS*1.72,                
+  parent:'alphaCenA', barycenterParent:'ac_anchor',
+  color:'#ffb347', groundColor:null,
+  radius:SUN_RADIUS*1.72,
   GM:GM_ALPHA_CEN_B, GMbase:GM_ALPHA_CEN_B,
-  solid:false, atmo:false,
+  solid:false, atmo:false, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri',
   distance:ALPHA_CEN_AB_DISTANCE, ecc:ALPHA_CEN_AB_ECC, omega:ALPHA_CEN_AB_OMEGA, initialAngle:0,
-  soi:221300445550.4541, 
-};
-BODIES_BY_KEY['alphaCenA']=ALPHA_CEN_A;
-BODIES_BY_KEY['alphaCenB']=ALPHA_CEN_B;
-STAR_BODIES.push(ALPHA_CEN_A, ALPHA_CEN_B);
+  soi:221300445550.4541,
+});
 
 // proxima
-const PROXIMA_DIST_AU = 50; 
+const PROXIMA_DIST_AU = 50;
 const PROXIMA_DISTANCE = PROXIMA_DIST_AU*AU;
-const PROXIMA_ECC = 0.50; 
-const PROXIMA_OMEGA = Math.sqrt(GM_ALPHA_CEN_AB/Math.pow(PROXIMA_DISTANCE,3)); 
-const PROXIMA_RADIUS = SUN_RADIUS*0.3; 
-const PROXIMA_SOI = Math.max(PROXIMA_RADIUS*3, PROXIMA_DISTANCE*Math.cbrt(GM_PROXIMA/(3*GM_ALPHA_CEN_AB))*0.1); 
+const PROXIMA_ECC = 0.50;
+const PROXIMA_OMEGA = Math.sqrt(GM_ALPHA_CEN_AB/Math.pow(PROXIMA_DISTANCE,3));
+const PROXIMA_RADIUS = SUN_RADIUS*0.3;
+const PROXIMA_SOI = Math.max(PROXIMA_RADIUS*3, PROXIMA_DISTANCE*Math.cbrt(GM_PROXIMA/(3*GM_ALPHA_CEN_AB))*0.1);
 
-const PROXIMA = {
+const PROXIMA = registerStar({
   key:'proxima', name:'Proxima Centauri (Alpha Centauri C)',
   parent:'ac_anchor',
   color:'#c0392b', groundColor:null,
   radius:PROXIMA_RADIUS,
   GM:GM_PROXIMA, GMbase:GM_PROXIMA,
-  solid:false, atmo:false,
+  solid:false, atmo:false, musicTheme:'nightVision', arrowGroup:'alphaCen', arrowGroupLabel:'Alpha Centauri', warpCapOverride:1000000,
   distance:PROXIMA_DISTANCE, ecc:PROXIMA_ECC, omega:PROXIMA_OMEGA, initialAngle:Math.PI*0.5,
   soi:PROXIMA_SOI,
-};
-BODIES_BY_KEY['proxima']=PROXIMA;
-STAR_BODIES.push(PROXIMA);
-
-// Proxima planets
-//copy same code as sun planets
-const PROXIMA_PLANET_DEFS = [
-  {key:'proximaD', name:'Proxima Centauri d', color:'#8a7060', groundColor:'#6d5748', radius:243000, surfG:8.9, distAU:0.0100, solid:true, atmo:false, eccMod:0.99},
-  {key:'proximaB', name:'Proxima Centauri b', color:'#9c7a5c', groundColor:'#7a5f47', radius:309000, surfG:11.3, distAU:0.0165, solid:true, atmo:true, atmoFrac:0.2, atmoColor:'#a88f77', eccMod:0.99},
-];
-const PROXIMA_PLANETS = PROXIMA_PLANET_DEFS.map((p,i)=>{
-  const distance = p.distAU*AU;
-  const GM = p.surfG*p.radius*p.radius*10; // 10x planet gravity boost
-  const GMbase = p.surfG*p.radius*p.radius;
-  const omega = Math.sqrt(PROXIMA.GM/Math.pow(distance,3)); // real life orbit rate so d is moving fast as shiiii
-  const initialAngle = (i/PROXIMA_PLANET_DEFS.length)*Math.PI*2;
-  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*PROXIMA.GM))*0.4)*4; // 0.4 Hill-sphere scale, *4 extra SOI boost
-  const ecc = eccFromMod(p.eccMod);
-  const body = Object.assign({},p,{parent:'proxima',distance,GM,GMbase,omega,initialAngle,soi,ecc});
-  BODIES_BY_KEY[body.key]=body;
-  return body;
 });
-PLANETS.push(...PROXIMA_PLANETS);
-ALL_BODIES.push(ALPHA_CEN_A, ALPHA_CEN_B, PROXIMA, ...PROXIMA_PLANETS);
+
+// Proxima planets — same builder as every other system now
+const PROXIMA_PLANETS = buildPlanets(PROXIMA_PLANET_DEFS, PROXIMA, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:3, soiExtraMult:4});
 const ALPHA_CEN_MAX_EXTENT = (ALPHA_CEN_AB_DISTANCE+Math.max(ALPHA_CEN_A.soi,ALPHA_CEN_B.soi)+PROXIMA_DISTANCE+PROXIMA_SOI)*1.5;
+registerStarSystem({anchorPos:ALPHA_CEN_ANCHOR_POS, maxExtent:ALPHA_CEN_MAX_EXTENT});
 
 // add tau ceti anchor, placed 110 degrees around from alpha centauri's own direction off the sun
 const ALPHA_CEN_DIR_ANGLE = Math.atan2(ALPHA_CEN_SYSTEM_Y_AU, ALPHA_CEN_SYSTEM_DIST_AU);
 const TAU_CETI_DIR_ANGLE = ALPHA_CEN_DIR_ANGLE + 110*Math.PI/180;
-const ALPHA_CEN_REAL_LY = 4.37, TAU_CETI_REAL_LY = 11.9; 
+const ALPHA_CEN_REAL_LY = 4.37, TAU_CETI_REAL_LY = 11.9;
 const ALPHA_CEN_GAME_DIST_AU = Math.hypot(ALPHA_CEN_SYSTEM_DIST_AU, ALPHA_CEN_SYSTEM_Y_AU);
 const TAU_CETI_DIST_AU = ALPHA_CEN_GAME_DIST_AU * (TAU_CETI_REAL_LY/ALPHA_CEN_REAL_LY);
 const TAU_CETI_POS = {x:TAU_CETI_DIST_AU*AU*Math.cos(TAU_CETI_DIR_ANGLE), y:TAU_CETI_DIST_AU*AU*Math.sin(TAU_CETI_DIR_ANGLE)};
 const GM_TAU_CETI = 0.783*GM_SUN;
 
 // ez star
-const TAU_CETI = {
+const TAU_CETI = registerStar({
   key:'tauCeti', name:'Tau Ceti',
   parent:null, pos:TAU_CETI_POS,
   color:'#ffd27f', groundColor:null,
   radius:SUN_RADIUS*0.79,
   GM:GM_TAU_CETI, GMbase:GM_TAU_CETI,
-  solid:false, atmo:false,
-};
-BODIES_BY_KEY['tauCeti']=TAU_CETI;
-STAR_BODIES.push(TAU_CETI);
-
-const TAU_CETI_PLANET_DEFS = [
-  {key:'tauCetiG',name:'Tau Ceti g',parent:'tauCeti',color:'#3a2a1e',groundColor:'#2a1c13',radius:720000,surfG:13.2,distAU:0.52,solid:true,atmo:false,eccMod:0.94},
-  {key:'tauCetiH',name:'Tau Ceti h',parent:'tauCeti',color:'#b8552a',groundColor:'#9c4a24',radius:714000,surfG:13.1,distAU:0.96,solid:true,atmo:true, atmoFrac:0.2, atmoColor:'#c97b4a',eccMod:0.23},
-  {key:'tauCetiE',name:'Tau Ceti e',parent:'tauCeti',color:'#dbd9a3',groundColor:'#9da868',radius:1080000,surfG:19.8,distAU:2.2,solid:true,atmo:true, atmoFrac:0.52,atmoColor:'#e6e2b8',eccMod:0.82},
-  {key:'tauCetiF',name:'Tau Ceti f',parent:'tauCeti',color:'#2d5fae',groundColor:'#cfe3ea',radius:1086000,surfG:19.9,distAU:5.32,solid:true,atmo:true, atmoFrac:0.36,atmoColor:'#7fa8c9',eccMod:0.84},
-];
-TAU_CETI.soi = 7*TAU_CETI_PLANET_DEFS[TAU_CETI_PLANET_DEFS.length-1].distAU*AU; 
-const TAU_CETI_PLANETS = TAU_CETI_PLANET_DEFS.map((p,i)=>{
-  const distance = p.distAU*AU;
-  const GM = p.surfG*p.radius*p.radius*10; 
-  const GMbase = p.surfG*p.radius*p.radius;
-  const omega = Math.sqrt(TAU_CETI.GM/Math.pow(distance,3));
-  const initialAngle = (i/TAU_CETI_PLANET_DEFS.length)*Math.PI*2;
-  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(3*TAU_CETI.GM))*0.4)*4; 
-  const ecc = eccFromMod(p.eccMod);
-  const body = Object.assign({},p,{distance,GM,GMbase,omega,initialAngle,soi,ecc});
-  BODIES_BY_KEY[body.key]=body;
-  return body;
+  solid:false, atmo:false, musicTheme:'tauCeti', musicUsesAtmo:true,
 });
-PLANETS.push(...TAU_CETI_PLANETS);
-ALL_BODIES.push(TAU_CETI, ...TAU_CETI_PLANETS);
+
+TAU_CETI.soi = 7*TAU_CETI_PLANET_DEFS[TAU_CETI_PLANET_DEFS.length-1].distAU*AU;
+const TAU_CETI_PLANETS = buildPlanets(TAU_CETI_PLANET_DEFS, TAU_CETI, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:3, soiExtraMult:4, musicTheme:'tauCeti', musicUsesAtmo:true});
 const TAU_CETI_MAX_EXTENT = (TAU_CETI.soi+TAU_CETI_PLANETS[TAU_CETI_PLANETS.length-1].distance+TAU_CETI_PLANETS[TAU_CETI_PLANETS.length-1].soi)*1.5;
+registerStarSystem({anchorPos:TAU_CETI_POS, maxExtent:TAU_CETI_MAX_EXTENT});
 
 // Gliese 876 loosely based on real valz
 const GLIESE876_REAL_LY = 15.2;
@@ -839,45 +860,36 @@ const GM_GLIESE876 = 0.32*GM_SUN; // ~0.32x Sun's mass
 
 // real size tiny scaled up star/planet 1.5x their orbit 8x
 // ez star
-const GLIESE876 = {
+const GLIESE876 = registerStar({
   key:'gliese876', name:'Gliese 876',
   parent:null, pos:GLIESE876_POS,
   color:'#e8623f', groundColor:null,
   radius:SUN_RADIUS*0.54,
   GM:GM_GLIESE876, GMbase:GM_GLIESE876,
-  solid:false, atmo:false,
-};
-BODIES_BY_KEY['gliese876']=GLIESE876;
-STAR_BODIES.push(GLIESE876);
-
-const GLIESE876_PLANET_DEFS = [
-  {key:'gliese876D',name:'Gliese 876 d',parent:'gliese876',color:'#6b1a1a',groundColor:'#4a1414',radius:371250, surfG:17,distAU:0.396,solid:true, atmo:true, atmoFrac:3.64,atmoColor:'#cc6633',eccMod:0.965},
-  {key:'gliese876C',name:'Gliese 876 c',parent:'gliese876',color:'#4a6f57',groundColor:null,     radius:2520000,surfG:40,distAU:2.448,solid:false,atmo:true,               atmoColor:'#3a2e28',eccMod:0.743},
-  {key:'gliese876B',name:'Gliese 876 b',parent:'gliese876',color:'#2e3446',groundColor:null,     radius:2587500,surfG:52,distAU:3.924,solid:false,atmo:true,               atmoColor:'#332a66',eccMod:0.966},
-  {key:'gliese876E',name:'Gliese 876 e',parent:'gliese876',color:'#6fe0d4',groundColor:null,     radius:855000, surfG:20,distAU:6.012,solid:false,atmo:true,               atmoColor:'#3fa8ac',eccMod:0.970},
-];
-GLIESE876.soi = 12.5*GLIESE876_PLANET_DEFS[GLIESE876_PLANET_DEFS.length-1].distAU*AU;
-const GLIESE876_PLANETS = GLIESE876_PLANET_DEFS.map((p,i)=>{
-  const distance = p.distAU*AU;
-  const GM = p.surfG*p.radius*p.radius*10;
-  const GMbase = p.surfG*p.radius*p.radius;
-  const omega = Math.sqrt(GLIESE876.GM/Math.pow(distance,3));
-  const initialAngle = (i/GLIESE876_PLANET_DEFS.length)*Math.PI*2;
-  const soi = Math.max(p.radius*3, distance*Math.cbrt(GMbase/(355*GLIESE876.GM))*0.4)*4;
-  const ecc = eccFromMod(p.eccMod);
-  const body = Object.assign({},p,{distance,GM,GMbase,omega,initialAngle,soi,ecc});
-  BODIES_BY_KEY[body.key]=body;
-  return body;
+  solid:false, atmo:false, musicTheme:'signal', musicUsesAtmo:true,
 });
-PLANETS.push(...GLIESE876_PLANETS);
-ALL_BODIES.push(GLIESE876, ...GLIESE876_PLANETS);
+
+GLIESE876.soi = 12.5*GLIESE876_PLANET_DEFS[GLIESE876_PLANET_DEFS.length-1].distAU*AU;
+const GLIESE876_PLANETS = buildPlanets(GLIESE876_PLANET_DEFS, GLIESE876, {gmBoost:10, soiHillScale:0.4, soiHillDivisor:355, soiExtraMult:4, musicTheme:'signal', musicUsesAtmo:true});
 const GLIESE876_MAX_EXTENT = (GLIESE876.soi+GLIESE876_PLANETS[GLIESE876_PLANETS.length-1].distance+GLIESE876_PLANETS[GLIESE876_PLANETS.length-1].soi)*1.5;
+registerStarSystem({anchorPos:GLIESE876_POS, maxExtent:GLIESE876_MAX_EXTENT});
 
 const BODY_CHILDREN = {};
 PLANETS.forEach(p=>{
   if(!BODY_CHILDREN[p.parent]) BODY_CHILDREN[p.parent]=[];
   BODY_CHILDREN[p.parent].push(p);
 });
+
+function registerAsteroidBody(a){
+  BODIES_BY_KEY[a.key]=a;
+  if(!BODY_CHILDREN[a.parent]) BODY_CHILDREN[a.parent]=[];
+  BODY_CHILDREN[a.parent].push(a);
+}
+function unregisterAsteroidBody(a){
+  delete BODIES_BY_KEY[a.key];
+  const kids=BODY_CHILDREN[a.parent];
+  if(kids){ const idx=kids.indexOf(a); if(idx!==-1) kids.splice(idx,1); }
+}
 
 // SOI nesting depth (sun=0, planet=1, moon=2) — gates timewarp caps and auto-pause
 function bodyDepth(b){ // warp cap based on soi type if planet or moon or sun or whatever
@@ -943,6 +955,12 @@ function binaryPairVelocity(p,partner,t){
 }
 
 function planetPositionAt(p,simTime){
+  if(p.isAsteroid){
+    if(p._posCacheT===simTime) return p._posCacheVal;
+    const result=asteroidWorldPos(p,simTime);
+    p._posCacheT=simTime; p._posCacheVal=result;
+    return result;
+  }
   if(p.parent===null) return p.pos||SUN_POS; //Sun doesnt orbit anything and it doesnt have a parent as stated earlier //Edit stuff can carry a fixed `pos` (e.g. the far-away Alpha Centauri anchor) instead of being around the Sun's origin
   if(p._posCacheT===simTime) return p._posCacheVal;
   const parent=BODIES_BY_KEY[p.parent];
@@ -957,6 +975,12 @@ function planetPositionAt(p,simTime){
   return result;
 }
 function planetVelocityAt(p,t){
+  if(p.isAsteroid){ // see planetPositionAt ok
+    if(p._velCacheT===t) return p._velCacheVal;
+    const result=asteroidWorldVel(p,t);
+    p._velCacheT=t; p._velCacheVal=result;
+    return result;
+  }
   if(p.parent===null) return {x:0,y:0};
   if(p._velCacheT===t) return p._velCacheVal;
   const parent=BODIES_BY_KEY[p.parent];
@@ -978,10 +1002,12 @@ const _domBodyStack=[];
 function findDominantBody(pos,t){
   const dxSun=pos.x-SUN_POS.x, dySun=pos.y-SUN_POS.y;
   if(dxSun*dxSun+dySun*dySun>SUN_BODY.soi*SUN_BODY.soi){
-    const dxAC=pos.x-ALPHA_CEN_ANCHOR_POS.x, dyAC=pos.y-ALPHA_CEN_ANCHOR_POS.y;
-    const dxTC=pos.x-TAU_CETI_POS.x, dyTC=pos.y-TAU_CETI_POS.y;
-    const dxG876=pos.x-GLIESE876_POS.x, dyG876=pos.y-GLIESE876_POS.y;
-    if(dxAC*dxAC+dyAC*dyAC>ALPHA_CEN_MAX_EXTENT*ALPHA_CEN_MAX_EXTENT && dxTC*dxTC+dyTC*dyTC>TAU_CETI_MAX_EXTENT*TAU_CETI_MAX_EXTENT && dxG876*dxG876+dyG876*dyG876>GLIESE876_MAX_EXTENT*GLIESE876_MAX_EXTENT) return null; //weird bugfix for tau ceti appear as deep space idk why but works. (same fix extended to gliese 876)
+    // Generic.
+    const inAnySystem=STAR_SYSTEMS.some(sys=>{
+      const dx=pos.x-sys.anchorPos.x, dy=pos.y-sys.anchorPos.y;
+      return dx*dx+dy*dy<=sys.maxExtent*sys.maxExtent;
+    });
+    if(!inAnySystem) return null; //weird bugfix for tau ceti appearing as deep space idk why but works. (same fix extended to gliese 876 and any future system)
   }
   let best=null;
   const stack=_domBodyStack; stack.length=0;
@@ -1005,31 +1031,34 @@ const EARTH_SURF_G = EARTH.GM/(EARTH.radius*EARTH.radius);
 
 // part definitions thrust fuel values gameplay
 const PARTS = {
-  pod:   {id:'pod',  name:'Command Pod',       w:2,h:2,dryMass:800, fuel:0,    thrust:0,      fuelRate:0,  color:'#8fb7ff',type:'pod',cat:'Command'},
-  tankS: {id:'tankS',name:'Fuel Tank — Small', w:2,h:4,dryMass:400, fuel:1800, thrust:0,      fuelRate:0,  color:'#c7cdd6',type:'tank',cat:'Fuel'},
-  tankM: {id:'tankM',name:'Fuel Tank — Medium',w:4,h:6,dryMass:700, fuel:4200, thrust:0,      fuelRate:0,  color:'#aab2bd',type:'tank',cat:'Fuel'},
-  tankL: {id:'tankL',name:'Fuel Tank — Large', w:4,h:8,dryMass:1100,fuel:8000, thrust:0,      fuelRate:0,  color:'#8d96a3',type:'tank',cat:'Fuel'},
-  engB:  {id:'engB', name:'Basic Engine',      w:2,h:3,dryMass:500, fuel:0,    thrust:900000, fuelRate:25, color:'#ff8a4c',type:'engine',cat:'Engines'},
-  engA:  {id:'engA', name:'Advanced Engine',   w:4,h:3,dryMass:650, fuel:0,    thrust:1900000, fuelRate:45,   color:'#ff5c4c',type:'engine',cat:'Engines'},
-  engQB: {id:'engQB',name:'Quickburn Basic Engine',   w:2,h:3,dryMass:450, fuel:0, thrust:2720000,  fuelRate:150,  color:'#1a1a1a',type:'engine',cat:'Engines'},
-  engQA: {id:'engQA',name:'Quickburn Advanced Engine',w:4,h:3,dryMass:700, fuel:0, thrust:19200000, fuelRate:1500, color:'#0e0e0e',type:'engine',cat:'Engines'},
-  ionEngine:{id:'ionEngine',name:'Ion Engine', w:1,h:1,dryMass:40,  fuel:0,    thrust:3000,    fuelRate:0.25, color:'#8fe6ff',type:'engine',cat:'Engines',ionOnly:true},
-  chute: {id:'chute',name:'Parachute',         w:2,h:2,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#f2f2f2',type:'chute',cat:'Aero'},
-  sep:   {id:'sep',  name:'Separator',         w:4,h:1,dryMass:80,  fuel:0,    thrust:0,      fuelRate:0,  color:'#333333',type:'separator',cat:'Staging'},
-  dock:  {id:'dock', name:'Docking Port',      w:2,h:1,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#4CAF50',type:'dock',cat:'Utility'},
-  rcs:   {id:'rcs',  name:'RCS Thruster',      w:1,h:2,dryMass:80,  fuel:0,    thrust:120000, fuelRate:3,  color:'#5cc9ff',type:'rcs',cat:'Utility'},
-  wheel: {id:'wheel',name:'Wheel',             w:2,h:2,dryMass:150, fuel:0,    thrust:0,      fuelRate:0,  color:'#3a3a3a',type:'wheel',cat:'Utility'},
-  legs:  {id:'legs', name:'Landing Legs',      w:2,h:2,dryMass:90,  fuel:0,    thrust:0,      fuelRate:0,  color:'#6a6e74',type:'legs',cat:'Utility'},
-  solar: {id:'solar',name:'Solar Panel',       w:4,h:1,dryMass:45,  fuel:0,    thrust:0,      fuelRate:0,  color:'#1a3a7a',type:'solar',cat:'Utility'},
-  ionStorage:{id:'ionStorage',name:'Ion Storage', w:2,h:2,dryMass:80, fuel:0,  thrust:0,      fuelRate:0,  color:'#2a5a3a',type:'ionstorage',cat:'Utility'},
-  fuelComp:{id:'fuelComp',name:'Fuel Compressor', w:4,h:3,dryMass:1650, rawMass:2200, fuel:0, thrust:0, fuelRate:0, color:'#23262b',type:'fuelcompressor',cat:'Utility'},
-  coneS: {id:'coneS',name:'Nose Cone — Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',cat:'Aero',dragMult:0.7},
-  coneM: {id:'coneM',name:'Nose Cone — Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',cat:'Aero',dragMult:0.55},
-  coneL: {id:'coneL',name:'Nose Cone — Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',cat:'Aero',dragMult:0.4},
-  fairS: {id:'fairS',name:'Fairing — Small',   w:2,h:4,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#d0d6de',type:'fairing',cat:'Aero',dragMult:0.5},
-  fairM: {id:'fairM',name:'Fairing — Medium',  w:4,h:6,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4cad2',type:'fairing',cat:'Aero',dragMult:0.45},
-  fairL: {id:'fairL',name:'Fairing — Large',   w:4,h:8,dryMass:200, fuel:0,    thrust:0,      fuelRate:0,  color:'#b8bec6',type:'fairing',cat:'Aero',dragMult:0.4},
-  fairTip:{id:'fairTip',name:'Fairing Cone Tip', w:2,h:2,dryMass:40,fuel:0,    thrust:0,      fuelRate:0,  color:'#e0e4ea',type:'fairing',cat:'Aero',dragMult:0.35,fairingTip:true},
+  pod:   {id:'pod',  name:'Command Pod',       w:2,h:2,dryMass:800, fuel:0,    thrust:0,      fuelRate:0,  color:'#8fb7ff',type:'pod',cat:'Command',heatResist:0.35},
+  tankS: {id:'tankS',name:'Fuel Tank — Small', w:2,h:4,dryMass:400, fuel:1800, thrust:0,      fuelRate:0,  color:'#c7cdd6',type:'tank',cat:'Fuel',heatResist:0.10},
+  tankM: {id:'tankM',name:'Fuel Tank — Medium',w:4,h:6,dryMass:700, fuel:4200, thrust:0,      fuelRate:0,  color:'#aab2bd',type:'tank',cat:'Fuel',heatResist:0.10},
+  tankL: {id:'tankL',name:'Fuel Tank — Large', w:4,h:8,dryMass:1100,fuel:8000, thrust:0,      fuelRate:0,  color:'#8d96a3',type:'tank',cat:'Fuel',heatResist:0.10},
+  engB:  {id:'engB', name:'Basic Engine',      w:2,h:3,dryMass:500, fuel:0,    thrust:900000, fuelRate:25, color:'#ff8a4c',type:'engine',cat:'Engines',heatResist:0.25},
+  engA:  {id:'engA', name:'Advanced Engine',   w:4,h:3,dryMass:650, fuel:0,    thrust:1900000, fuelRate:45,   color:'#ff5c4c',type:'engine',cat:'Engines',heatResist:0.25},
+  engQB: {id:'engQB',name:'Quickburn Basic Engine',   w:2,h:3,dryMass:450, fuel:0, thrust:2720000,  fuelRate:150,  color:'#1a1a1a',type:'engine',cat:'Engines',heatResist:0.25},
+  engQA: {id:'engQA',name:'Quickburn Advanced Engine',w:4,h:3,dryMass:700, fuel:0, thrust:19200000, fuelRate:1500, color:'#0e0e0e',type:'engine',cat:'Engines',heatResist:0.25},
+  ionEngine:{id:'ionEngine',name:'Ion Engine', w:1,h:1,dryMass:40,  fuel:0,    thrust:3000,    fuelRate:0.25, color:'#8fe6ff',type:'engine',cat:'Engines',ionOnly:true,heatResist:0.2},
+  chute: {id:'chute',name:'Parachute',         w:2,h:2,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#f2f2f2',type:'chute',cat:'Aero',heatResist:0.05},
+  sep:   {id:'sep',  name:'Separator',         w:4,h:1,dryMass:80,  fuel:0,    thrust:0,      fuelRate:0,  color:'#333333',type:'separator',cat:'Staging',heatResist:0.15},
+  dock:  {id:'dock', name:'Docking Port',      w:2,h:1,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#4CAF50',type:'dock',cat:'Utility',heatResist:0.15},
+  rcs:   {id:'rcs',  name:'RCS Thruster',      w:1,h:2,dryMass:80,  fuel:0,    thrust:120000, fuelRate:3,  color:'#5cc9ff',type:'rcs',cat:'Utility',heatResist:0.10},
+  wheel: {id:'wheel',name:'Wheel',             w:2,h:2,dryMass:150, fuel:0,    thrust:0,      fuelRate:0,  color:'#3a3a3a',type:'wheel',cat:'Utility',heatResist:0.10},
+  legs:  {id:'legs', name:'Landing Legs',      w:2,h:2,dryMass:90,  fuel:0,    thrust:0,      fuelRate:0,  color:'#6a6e74',type:'legs',cat:'Utility',heatResist:0.15},
+  solar: {id:'solar',name:'Solar Panel',       w:4,h:1,dryMass:45,  fuel:0,    thrust:0,      fuelRate:0,  color:'#1a3a7a',type:'solar',cat:'Utility',heatResist:0.05},
+  ionStorage:{id:'ionStorage',name:'Ion Storage', w:2,h:2,dryMass:80, fuel:0,  thrust:0,      fuelRate:0,  color:'#2a5a3a',type:'ionstorage',cat:'Utility',heatResist:0.15},
+  fuelComp:{id:'fuelComp',name:'Fuel Compressor', w:4,h:3,dryMass:1650, rawMass:2200, fuel:0, thrust:0, fuelRate:0, color:'#23262b',type:'fuelcompressor',cat:'Utility',heatResist:0.20,heatShield:true,heatBlock:0.60},
+  coneS: {id:'coneS',name:'Nose Cone — Small', w:2,h:2,dryMass:100, fuel:0,    thrust:0,      fuelRate:0,  color:'#d9d9d9',type:'cone',cat:'Aero',dragMult:0.7,heatResist:0.5},
+  coneM: {id:'coneM',name:'Nose Cone — Medium',w:4,h:3,dryMass:180, fuel:0,    thrust:0,      fuelRate:0,  color:'#cfcfcf',type:'cone',cat:'Aero',dragMult:0.55,heatResist:0.55},
+  coneL: {id:'coneL',name:'Nose Cone — Large', w:4,h:4,dryMass:260, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4c4c4',type:'cone',cat:'Aero',dragMult:0.4,heatResist:0.6},
+  fairS: {id:'fairS',name:'Fairing — Small',   w:2,h:4,dryMass:60,  fuel:0,    thrust:0,      fuelRate:0,  color:'#d0d6de',type:'fairing',cat:'Aero',dragMult:0.5,heatResist:0.45},
+  fairM: {id:'fairM',name:'Fairing — Medium',  w:4,h:6,dryMass:120, fuel:0,    thrust:0,      fuelRate:0,  color:'#c4cad2',type:'fairing',cat:'Aero',dragMult:0.45,heatResist:0.5},
+  fairL: {id:'fairL',name:'Fairing — Large',   w:4,h:8,dryMass:200, fuel:0,    thrust:0,      fuelRate:0,  color:'#b8bec6',type:'fairing',cat:'Aero',dragMult:0.4,heatResist:0.55},
+  fairTip:{id:'fairTip',name:'Fairing Cone Tip', w:2,h:2,dryMass:40,fuel:0,    thrust:0,      fuelRate:0,  color:'#e0e4ea',type:'fairing',cat:'Aero',dragMult:0.35,fairingTip:true,heatResist:0.5},
+  heatShieldS:{id:'heatShieldS',name:'Heat Shield — Small', w:2,h:1,dryMass:140,fuel:0,thrust:0,fuelRate:0,color:'#8a5a3a',type:'heatshield',cat:'Aero',dragMult:0.6,heatResist:0.9,heatShield:true,heatBlock:0.90},
+  heatShieldM:{id:'heatShieldM',name:'Heat Shield — Medium',w:4,h:1,dryMass:230,fuel:0,thrust:0,fuelRate:0,color:'#7a4e30',type:'heatshield',cat:'Aero',dragMult:0.55,heatResist:0.92,heatShield:true,heatBlock:0.96},
+  heatShieldL:{id:'heatShieldL',name:'Heat Shield — Large', w:4,h:1,dryMass:340,fuel:0,thrust:0,fuelRate:0,color:'#6a4228',type:'heatshield',cat:'Aero',dragMult:0.5,heatResist:0.95,heatShield:true,heatBlock:0.99},
 };
 const PART_LIST = Object.values(PARTS);
 const PART_CATS = ['Command','Fuel','Engines','Staging','Aero','Utility'];
@@ -1059,9 +1088,8 @@ function shadeColor(hex,amt){
   r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
   return 'rgb('+r+','+g+','+b+')';
 }
-function drawPartShape(ctx,d,x,y,w,h){
-  ctx.save();
-  // Base path
+// Base path shape for a part — factored out so both drawPartShape (fill/stroke) - edit reused for heating re-entry 
+function buildPartShapePath(ctx,d,x,y,w,h){
   if(d.type==='pod'){
     // 1×2 capsule
     roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.22);
@@ -1139,6 +1167,11 @@ function drawPartShape(ctx,d,x,y,w,h){
   } else {
     roundRectPath(ctx,x,y,w,h,Math.min(w,h)*0.12);
   }
+}
+function drawPartShape(ctx,d,x,y,w,h){
+  ctx.save();
+  // Base path
+  buildPartShapePath(ctx,d,x,y,w,h);
 
   // Richer metallic / material gradient fill
   if(d.type==='engine'){
@@ -1649,6 +1682,7 @@ const cheats = {
   camRotate: true,
   navBeacon: false,
   typeEdit: false,
+  indestructible: false,
   buildNoclip: false,   // build mode only — skip part overlap check
   buildBigGrid: false,  // build mode only — 64x96 grid instead of 24x75
 };
@@ -1740,6 +1774,9 @@ function buildPalette(){
     if(p.type==='fuelcompressor') statsHtml+=`<br>A heavy electronic beast which can cook up fuel. Not very efficient, but smaller than a fuel tank if you can wait given you have the ion power to supply it.`
       +`<ul class="pstats-bullets"></li>`
       +`<li>Produces 2200 fuel</li><li>-20,000 ion charge to do this</li></ul>`;
+    if(p.type==='heatshield') statsHtml+=`<br>Mounts facing the oncoming airflow during reentry and shields parts stacked behind it from heat build-up. Blocks ${Math.round(p.heatBlock*100)}% of incoming heat for shielded parts.`;
+    if(p.heatShield&&p.type!=='heatshield') statsHtml+=`<br>Its dense housing also blocks ${Math.round(p.heatBlock*100)}% of incoming reentry heat for parts stacked behind it.`;
+    if(typeof p.heatResist==='number') statsHtml+=`<ul class="pstats-bullets"><li>Heat resistance: ${Math.round(p.heatResist*100)}%</li></ul>`;
     card.innerHTML=`<div class="pname"><span class="swatch" style="background:${p.color}"></span>${p.name}</div>
       <div class="pstats">${statsHtml}</div>`;
     card.onclick=()=>{ selectedPartId=p.id; buildPalette(); };
@@ -2383,6 +2420,7 @@ function recomputeShipFromParts(ship){
   const keepUids=new Set(ship.parts.map(pp=>String(pp.uid)));
   Object.keys(ship.tankFuel).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.tankFuel[uid]; });
   Object.keys(ship.engineEnabled).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.engineEnabled[uid]; });
+  if(ship.partHeat) Object.keys(ship.partHeat).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.partHeat[uid]; });
   if(ship.compressorOn) Object.keys(ship.compressorOn).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.compressorOn[uid]; });
   if(ship.compressorIon) Object.keys(ship.compressorIon).forEach(uid=>{ if(!keepUids.has(uid)) delete ship.compressorIon[uid]; });
   ship.engineConnections=computeEngineConnections(ship.parts);
@@ -2565,9 +2603,9 @@ function launch(){
     tankFuel, engineEnabled, engineConnections,
     compressorOn, compressorIon, compressorConnections,
     engineOn:false, throttle:1, chuteDeployed:false,
-    status:'landed', statusMsg:'Ready for launch on Earth.',
+    status:'landed', statusMsg:'Ready for launch on Earth.', landedOnAsteroid:null,
     trail:makeTrail(), lastTrailPos:null, _inAtmo:true, _domBody:EARTH,
-    landedOnPlanet:EARTH,
+    landedOnPlanet:EARTH, partHeat:{},
   };
   const foot=shipFootOffset(ship);
   const groundR=EARTH.radius+PAD_H+foot;
@@ -2635,6 +2673,7 @@ function saveShips(){
         compressorOn:s.compressorOn, compressorIon:s.compressorIon,
         throttle:s.throttle, chuteDeployed:s.chuteDeployed,
         status:s.status, ionCharge:s.ionCharge||0,
+        partHeat:s.partHeat,
       }));
     localStorage.setItem(SAVE_KEY,JSON.stringify({simTime,shipCounter,ships:data}));
   }catch(err){}
@@ -2678,6 +2717,7 @@ function loadShips(){
         chuteDeployed:!!s.chuteDeployed,
         status:'flying', statusMsg:'',
         trail:makeTrail(), lastTrailPos:null, _inAtmo:false, _domBody:null,
+        partHeat:s.partHeat||{},
       };
     });
     return true;
@@ -2771,19 +2811,28 @@ function setWarp(w){
   });
   hud.warp.textContent=formatWarpLabel(w);
 }
+function stepWarp(dir){
+  let idx=WARP_LEVELS.indexOf(warp);
+  if(idx===-1){
+    idx=WARP_LEVELS.findIndex(w2=>w2>warp);
+    if(idx===-1) idx=WARP_LEVELS.length-1;
+    else if(dir<0) idx=Math.max(0,idx-1);
+  }
+  idx=Math.max(0,Math.min(WARP_LEVELS.length-1,idx+dir));
+  setWarp(WARP_LEVELS[idx]);
+}
 function computeMaxAllowedWarp(){
   let cap=Infinity; //no cap frfr
   const sh=activeShip(); // warp cap only ever comes from the focused ship — background/simulated ships must never restrict or drop the player's warp
   if(sh&&sh.status==='flying'){
     if(sh._inAtmo){
-      // SPECIFICALLY because gliese d has a 1m unit atmosphere its literally hell
-      const atmoCap=(sh._domBody===BODIES_BY_KEY.gliese876D)?25:5;
+      const atmoCap=(sh._domBody&&sh._domBody.atmoWarpCap!==undefined)?sh._domBody.atmoWarpCap:5;
       cap=Math.min(cap,atmoCap);
     }
     else{
       const depth=bodyDepth(sh._domBody); //cap based on planet moon or sun or interstellar or wtv
       if(depth>=2) cap=Math.min(cap,100); //100x cap inside moon soi
-      else if(sh._domBody===PROXIMA) cap=Math.min(cap,1000000);
+      else if(sh._domBody&&sh._domBody.warpCapOverride!==undefined) cap=Math.min(cap,sh._domBody.warpCapOverride);
       else if(depth===1) cap=Math.min(cap,10000); //and 10kx for planet soi.
     }
   }
@@ -2869,6 +2918,7 @@ function toggleEngine(){ //changed location of this so pressing space can toggle
     sh.statusMsg='';
     sh.landedRelPos=null;
     sh.landedOnPlanet=null;
+    sh.landedOnAsteroid=null;
     sh._inAtmo=true; // still on surface, physics will sort it out
     sh.engineOn=true;
     if(warp>MAX_CONTROL_WARP) setWarp(1);
@@ -2922,6 +2972,7 @@ el('cheatTypeEdit').onchange=e=>{
   if(cheats.typeEdit) populateTypeEditInputs();
   positionShipList();
 };
+el('cheatIndestructible').onchange=e=>{ cheats.indestructible=e.target.checked; };
 
 // Teleport cheat — drop active ship just above a planet surface
 (function fillTeleportSelect(){
@@ -2948,7 +2999,7 @@ el('cheatTypeEdit').onchange=e=>{
       sh.vel.x=pvel.x; sh.vel.y=pvel.y;
       sh.angle=Math.atan2(nx,ny);
       sh.status='landed'; sh.statusMsg='Landed on '+body.name;
-      sh.landedOnPlanet=body;
+      sh.landedOnPlanet=body; sh.landedOnAsteroid=null;
       sh.landedRelPos={x:sh.pos.x-ppos.x,y:sh.pos.y-ppos.y};
       sh._inAtmo=!!body.atmo;
     } else {
@@ -2960,7 +3011,7 @@ el('cheatTypeEdit').onchange=e=>{
       sh.vel.x=pvel.x; sh.vel.y=pvel.y;
       sh.angle=Math.atan2(nx,ny);
       sh.status='flying'; sh.statusMsg='';
-      sh.landedOnPlanet=null; sh.landedRelPos=null;
+      sh.landedOnPlanet=null; sh.landedRelPos=null; sh.landedOnAsteroid=null;
       sh._inAtmo=true;
     }
     sh._domBody=body;
@@ -2983,7 +3034,8 @@ function populateTypeEditInputs(){
     const ppos=planetPositionAt(sh._domBody,simTime);
     const pv=planetVelocityAt(sh._domBody,simTime);
     speed=Math.hypot(sh.vel.x-pv.x,sh.vel.y-pv.y);
-    alt=Math.hypot(sh.pos.x-ppos.x,sh.pos.y-ppos.y)-sh._domBody.radius;
+    const dx=sh.pos.x-ppos.x, dy=sh.pos.y-ppos.y;
+    alt=Math.hypot(dx,dy)-bodySurfaceRadius(sh._domBody,dx,dy);
   } else {
     speed=Math.hypot(sh.vel.x,sh.vel.y);
     alt=Math.hypot(sh.pos.x-SUN_POS.x,sh.pos.y-SUN_POS.y)-SUN_RADIUS;
@@ -3014,14 +3066,14 @@ function teApplyAltitude(val){
   const sh=activeShip(); const v=parseFloat(val);
   if(!sh||!isFinite(v)) return;
   const centerPos=sh._domBody?planetPositionAt(sh._domBody,simTime):SUN_POS;
-  const surfaceR=sh._domBody?sh._domBody.radius:SUN_RADIUS;
   let dx=sh.pos.x-centerPos.x, dy=sh.pos.y-centerPos.y;
+  const surfaceR=sh._domBody?bodySurfaceRadius(sh._domBody,dx,dy):SUN_RADIUS;
   const dist=Math.hypot(dx,dy)||1;
   const nx=dx/dist, ny=dy/dist;
   const newDist=surfaceR+Math.max(0,v);
   sh.pos.x=centerPos.x+nx*newDist; sh.pos.y=centerPos.y+ny*newDist;
   if(sh.status==='landed'){
-    sh.status='flying'; sh.statusMsg=''; sh.landedOnPlanet=null; sh.landedRelPos=null;
+    sh.status='flying'; sh.statusMsg=''; sh.landedOnPlanet=null; sh.landedRelPos=null; sh.landedOnAsteroid=null;
     updateEngineBtn();
   }
 }
@@ -3208,6 +3260,8 @@ window.addEventListener('keydown',e=>{
   if(mode==='flight'&&document.activeElement&&document.activeElement.tagName!=='INPUT'){
     if(k==='f') setCamFree(!camFree);
     if(e.key==='Home') setCamFree(false);
+    if(e.key==='ArrowUp'||k==='t'){ e.preventDefault(); stepWarp(1); }
+    if(e.key==='ArrowDown'||k==='g'){ e.preventDefault(); stepWarp(-1); }
   }
 });
 window.addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
@@ -3444,6 +3498,383 @@ function destroyShip(f,reason){
   showToast(reason);
 }
 
+// re entry physics built for this game by KampfGuy so credit to KampfGuy for the original formula on this. helpful and saved me hours
+const HEAT_PART_LIMIT = 10;       
+const HEAT_COOL_RATE = 0.5;       
+const HEAT_IDLE_DRAIN = 0.15;     
+const HEAT_ONSET_FRAC = 0.4;      
+const HEAT_SCALE_FRAC = 0.35;     
+const HEAT_COEFF = 25;            
+function partLocalCenter(sh,pp){
+  const eff=effDims(pp.id,partRot(pp));
+  return {
+    x:((pp.col-sh.sprite.minC+eff.w/2)-sh.sprite.comXc),
+    y:((pp.row-sh.sprite.minR+eff.h/2)-sh.sprite.comYc),
+    hw:eff.w/2, hh:eff.h/2
+  };
+}
+function shipLocalHeatAxis(sh,dirWorld){
+  const ca=Math.cos(sh.angle), sa=Math.sin(sh.angle);
+  const rx=dirWorld.x, ry=-dirWorld.y;
+  const ex=rx*ca+ry*sa, ey=-rx*sa+ry*ca;
+  const len=Math.hypot(ex,ey)||1;
+  return {x:ex/len, y:ey/len};
+}
+function computeHeatShielding(sh,axis){
+  const perp={x:-axis.y,y:axis.x};
+  const shields=sh.parts.filter(pp=>PARTS[pp.id].heatShield).map(pp=>{
+    const c=partLocalCenter(sh,pp);
+    return {
+      proj:c.x*axis.x+c.y*axis.y,
+      perp:c.x*perp.x+c.y*perp.y,
+      halfWidth:Math.max(c.hw,c.hh)*1.15,
+      block:PARTS[pp.id].heatBlock||0.8
+    };
+  });
+  const result={};
+  sh.parts.forEach(pp=>{
+    const c=partLocalCenter(sh,pp);
+    const proj=c.x*axis.x+c.y*axis.y;
+    const perpC=c.x*perp.x+c.y*perp.y;
+    let exposure=1;
+    shields.forEach(s=>{
+      if(s.proj>proj+0.05&&Math.abs(s.perp-perpC)<=s.halfWidth){
+        exposure*=(1-s.block);
+      }
+    });
+    result[pp.uid]=exposure;
+  });
+  return result;
+}
+// removes part n destroys whole thing if the cmd pod goes
+function burnOffPart(f,pp,planetName){
+  const d=PARTS[pp.id];
+  const idx=f.parts.indexOf(pp);
+  if(idx===-1) return;
+  f.parts.splice(idx,1);
+  delete f.partHeat[pp.uid];
+  if(d.type==='pod'||!f.parts.some(other=>PARTS[other.id].type==='pod')){
+    destroyShip(f,f.name+' lost its command pod to reentry heat over '+planetName+'.');
+    return;
+  }
+  recomputeShipFromParts(f);
+  if(!f._isBeaconClone) showToast(d.name+' burned off '+f.name+' during reentry.');
+}
+// adapted from KampfGuy's mod
+function applyAeroHeating(f,dt){
+  if(f._isBeaconClone||f.status!=='flying'||!f._inAtmo||!f._domBody) return;
+  if(!f.partHeat) f.partHeat={};
+  const p=f._domBody;
+  const dens=getAtmoDensity(f.pos,p);
+  const coolOff=()=>{
+    f.parts.forEach(pp=>{
+      if(!f.partHeat[pp.uid]) return;
+      f.partHeat[pp.uid]=Math.max(0,f.partHeat[pp.uid]-HEAT_COOL_RATE*dt);
+    });
+  };
+  if(dens<=0){ coolOff(); return; }
+  const ppos=planetPositionAt(p,simTime);
+  const pv=planetVelocityAt(p,simTime);
+  const relVx=f.vel.x-pv.x, relVy=f.vel.y-pv.y;
+  const rel=Math.hypot(relVx,relVy);
+  const r=Math.hypot(f.pos.x-ppos.x,f.pos.y-ppos.y)||1;
+  const vCirc=Math.sqrt((p.GM||1)/r);
+  if(rel<vCirc*HEAT_ONSET_FRAC){ coolOff(); return; }
+  const excess=Math.max(0,rel-vCirc*HEAT_ONSET_FRAC);
+  const baseHeat=dens*HEAT_COEFF*Math.pow(excess/(vCirc*HEAT_SCALE_FRAC+1),3);
+  if(baseHeat<=0){ coolOff(); return; }
+  const axisWorld={x:relVx/(rel||1),y:relVy/(rel||1)};
+  const axis=shipLocalHeatAxis(f,axisWorld);
+  f._heatAxisLocal=axis; // cached for the render overlay
+  const shielding=computeHeatShielding(f,axis);
+  const burned=[];
+  f.parts.forEach(pp=>{
+    const d=PARTS[pp.id];
+    const resist=typeof d.heatResist==='number'?d.heatResist:0.15;
+    const exposure=shielding[pp.uid]!=null?shielding[pp.uid]:1;
+    const inflow=baseHeat*exposure*(1-resist);
+    const cur=Math.max(0,(f.partHeat[pp.uid]||0)+inflow*dt-HEAT_IDLE_DRAIN*dt);
+    f.partHeat[pp.uid]=cur;
+    if(!cheats.indestructible&&cur>=HEAT_PART_LIMIT) burned.push(pp);
+  });
+  burned.forEach(pp=>{ if(f.parts.includes(pp)) burnOffPart(f,pp,p.name); });
+}
+
+// Asteroids.
+const ASTEROID_SPAWN_CHANCE = 0.3;      
+const ASTEROID_MIN_DIAMETER = 10;       
+const ASTEROID_MAX_DIAMETER = 50000;    
+const ASTEROID_ARROW_SOI_FRAC = 0.01;   
+const ASTEROID_MAX_COUNT = 3;           
+const ASTEROID_SOI_MIN = 1000;          
+const ASTEROID_GM_BOOST = 10;           
+const ASTEROID_SURF_G_PER_RADIUS = 5.59e-7; // Scientific notation. For those confused read a book - jk, it resolves to 0.0000559
+let asteroids = [];
+let _lastAsteroidTriggerKey = null; 
+let _asteroidIdSeq = 0;
+
+function asteroidEffectiveHome(domBody){
+  if(!domBody) return null;
+  if(MOON_KEY_SET.has(domBody.key)||domBody.isAsteroid) return BODIES_BY_KEY[domBody.parent]||null;
+  return domBody;
+}
+
+// blue is rare yey
+function randomAsteroidColor(){
+  if(Math.random()<0.03){
+    const blues=['#4fd7ff','#3fc2f0','#66e0ff'];
+    return blues[Math.floor(Math.random()*blues.length)];
+  }
+  const grayness=0.55+Math.random()*0.4;
+  const g=grayness*255;
+  const brownMix=Math.random()*0.7;
+  const r=g+brownMix*40, gg=g+brownMix*6, b=g-brownMix*70;
+  const clamp=v=>Math.max(0,Math.min(255,Math.round(v)));
+  return '#'+[r,gg,b].map(v=>clamp(v).toString(16).padStart(2,'0')).join('');
+}
+
+function randomAsteroidDiameter(){
+  const lo=Math.log(ASTEROID_MIN_DIAMETER), hi=Math.log(ASTEROID_MAX_DIAMETER);
+  return Math.exp(lo+Math.random()*(hi-lo));
+}
+
+function asteroidLocalState(a,t){
+  const GM=a.homeGM, rp=a.rp;
+  const h=Math.sqrt(GM*2*rp);
+  const Aparam=Math.sqrt(2*rp*rp*rp/GM);
+  const tau=t-a.periapsisT;
+  const halfq=1.5*tau/Aparam;             
+  const disc=halfq*halfq+1;               
+  const sq=Math.sqrt(disc);
+  const D=Math.cbrt(halfq+sq)+Math.cbrt(halfq-sq);
+  const theta=2*Math.atan(D);
+  const r=rp*(1+D*D);                     
+  const vr=(GM/h)*Math.sin(theta);
+  const vt=h/r;
+  const cosT=Math.cos(theta), sinT=Math.sin(theta);
+  const px=r*cosT, py=r*sinT;
+  const vx=vr*cosT-vt*sinT, vy=vr*sinT+vt*cosT;
+  const co=Math.cos(a.orient), so=Math.sin(a.orient);
+  let rx=px*co-py*so, ry=px*so+py*co;
+  let rvx=vx*co-vy*so, rvy=vx*so+vy*co;
+  if(a.mirrored){ ry=-ry; rvy=-rvy; }
+  return {rx,ry,rvx,rvy,r};
+}
+function asteroidWorldPos(a,t){
+  const home=BODIES_BY_KEY[a.homeKey];
+  if(!home) return a.pos;
+  const bpos=planetPositionAt(home,t), st=asteroidLocalState(a,t);
+  return {x:bpos.x+st.rx,y:bpos.y+st.ry};
+}
+function asteroidWorldVel(a,t){
+  const home=BODIES_BY_KEY[a.homeKey];
+  if(!home) return a.vel;
+  const bvel=planetVelocityAt(home,t), st=asteroidLocalState(a,t);
+  return {x:bvel.x+st.rvx,y:bvel.y+st.rvy};
+}
+
+function spawnAsteroidAt(body,t){
+  const GM=body.GM, R=body.soi;
+  if(!(GM>0)||!(R>0)) return null;
+  const minRp=Math.max(body.radius*1.15, R*0.02);
+  const maxRp=R*0.85;
+  if(minRp>=maxRp) return null;
+  const rp=minRp+Math.random()*(maxRp-minRp);
+  const cosThetaE=Math.min(1,Math.max(-0.999,(2*rp/R)-1));
+  const thetaE=Math.acos(cosThetaE);
+  const theta=-thetaE; 
+  const h=Math.sqrt(GM*2*rp);
+  const Aparam=Math.sqrt(2*rp*rp*rp/GM);
+  const D0=Math.tan(theta/2);
+  const tau0=Aparam*(D0+D0*D0*D0/3);
+  const periapsisT=t-tau0; 
+  const r=rp*(1+D0*D0);
+  const vr=(GM/h)*Math.sin(theta);
+  const vt=h/r;
+  const cosT=Math.cos(theta), sinT=Math.sin(theta);
+  const px=r*cosT, py=r*sinT;
+  const vx=vr*cosT-vt*sinT, vy=vr*sinT+vt*cosT;
+  const orient=Math.random()*Math.PI*2; 
+  const co=Math.cos(orient), so=Math.sin(orient);
+  let rx=px*co-py*so, ry=px*so+py*co;
+  let rvx=vx*co-vy*so, rvy=vx*so+vy*co;
+  const mirrored=Math.random()<0.5; 
+  if(mirrored){ ry=-ry; rvy=-rvy; }
+  const bpos=planetPositionAt(body,t), bvel=planetVelocityAt(body,t);
+  const diameter=randomAsteroidDiameter();
+  const radiusM=diameter/2;
+  const surfG=ASTEROID_SURF_G_PER_RADIUS*radiusM;
+  const GMbase=surfG*radiusM*radiusM;
+  const astGM=GMbase*ASTEROID_GM_BOOST; 
+  const soi=Math.max(ASTEROID_SOI_MIN, hillSOI(radiusM,GMbase,rp,GM,{soiHillScale:0.4,soiHillDivisor:3,soiExtraMult:2.5}));
+  const id='ast'+(_asteroidIdSeq++);
+  const angle0=Math.random()*Math.PI*2;
+  const a={
+    id, key:id, parent:body.key, homeKey:body.key, isAsteroid:true, solid:true, atmo:false,
+    musicTheme:'moonEurofunk', // asteroid SOIs share the same music theme as moon SOIs
+    name:'an asteroid', 
+    pos:{x:bpos.x+rx,y:bpos.y+ry},
+    vel:{x:bvel.x+rvx,y:bvel.y+rvy},
+    radiusM, radius:radiusM, // `radius` alias so generic body code (findDominantBody, domSurfaceGap, etc.) just works i know odd
+    GM:astGM, GMbase, homeGM:GM,
+    soi,
+    rp,thetaE,orient,mirrored,periapsisT,
+    spawnedAt:t,
+    color:randomAsteroidColor(),
+    angle0, angle:angle0,
+    spin:(Math.random()*2-1)*0.5,
+    verts:Array.from({length:9},()=>0.62+Math.random()*0.55)
+  };
+  registerAsteroidBody(a);
+  return a;
+}
+function bodySurfaceRadius(p,rx,ry){
+  if(!p.isAsteroid) return p.radius;
+  const local=asteroidFrameFlip(p.angle,rx,ry);
+  return asteroidPolygonRadius(p,Math.atan2(local.y,local.x));
+}
+//based on canvas not context bc rotate cam exists
+function asteroidFrameFlip(theta,x,y){
+  const c=Math.cos(theta), s=Math.sin(theta);
+  return {x:x*c-y*s, y:-(x*s+y*c)};
+}
+function asteroidPolygonRadius(a,localAng){
+  const n=a.verts.length, step=(Math.PI*2)/n;
+  const ang=((localAng%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
+  const idx=Math.floor(ang/step)%n, idx2=(idx+1)%n;
+  const a0=idx*step;
+  const r0=a.radiusM*a.verts[idx], r1=a.radiusM*a.verts[idx2];
+  const x0=Math.cos(a0)*r0, y0=Math.sin(a0)*r0;
+  const x1=Math.cos(a0+step)*r1, y1=Math.sin(a0+step)*r1;
+  const dx=x1-x0, dy=y1-y0;
+  const rdx=Math.cos(ang), rdy=Math.sin(ang);
+  const det=dx*rdy-dy*rdx;
+  if(Math.abs(det)<1e-9) return (r0+r1)/2;
+  const s=(dx*y0-dy*x0)/det;
+  return s>0?s:(r0+r1)/2;
+}
+function asteroidHasOccupant(a){
+  return ships.some(s=>s.landedOnAsteroid===a);
+}
+// if u sit on an asteroid like a dumbass it will kick you off no riding it out of the solar system which was an actual bug lol
+function evictShipsFromAsteroid(a){
+  ships.forEach(s=>{
+    if(s.landedOnAsteroid!==a) return;
+    s.status='flying'; s.statusMsg='Launched — the asteroid drifted out of range and broke up.';
+    shipListDirty=true;
+    s.landedOnPlanet=null; s.landedOnAsteroid=null; s.landedRelPos=null; s.landedFacingLocal=undefined;
+    s.vel.x=a.vel.x; s.vel.y=a.vel.y;
+    s.engineOn=false; if(s===activeShip()) updateEngineBtn();
+  });
+}
+
+function updateAsteroids(simSeconds,tStart){
+  if(!asteroids.length) return;
+  const t=tStart+simSeconds;
+  const removed=[];
+  asteroids.forEach(a=>{
+    const body=BODIES_BY_KEY[a.homeKey];
+    if(!body){ removed.push(a); return; }
+    const bpos=planetPositionAt(body,t), bvel=planetVelocityAt(body,t);
+    const st=asteroidLocalState(a,t);
+    a.pos={x:bpos.x+st.rx,y:bpos.y+st.ry};
+    a.vel={x:bvel.x+st.rvx,y:bvel.y+st.rvy};
+    a.angle=a.angle0+a.spin*(t-a.spawnedAt);
+    a._posCacheT=t; a._posCacheVal=a.pos; 
+    a._velCacheT=t; a._velCacheVal=a.vel;
+    if(st.r<body.radius||st.r>body.soi*1.02) removed.push(a);
+  });
+  if(removed.length){
+    removed.forEach(a=>{ evictShipsFromAsteroid(a); unregisterAsteroidBody(a); });
+    const ids=new Set(removed.map(a=>a.id));
+    asteroids=asteroids.filter(a=>!ids.has(a.id));
+  }
+}
+
+// weird shape instead of sphere like planet yey
+function drawAsteroidShape(ctx,r,a){
+  const n=a.verts.length;
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const ang=(i/n)*Math.PI*2;
+    const rr=r*a.verts[i];
+    const x=Math.cos(ang)*rr, y=Math.sin(ang)*rr;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  const grad=ctx.createRadialGradient(-r*0.3,-r*0.3,Math.max(0.01,r*0.1),0,0,r*1.1);
+  grad.addColorStop(0,shadeColor(a.color,0.25));
+  grad.addColorStop(1,shadeColor(a.color,-0.35));
+  ctx.fillStyle=grad; ctx.fill();
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.stroke();
+}
+function drawAsteroids(){
+  if(!asteroids.length) return;
+  const CW=_frameCW,CH=_frameCH;
+  asteroids.forEach(a=>{
+    const s=worldToScreen(a.pos.x,a.pos.y);
+    const r=Math.max(1,a.radiusM/camera.metersPerPixel);
+    if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
+    fctx.save();
+    fctx.translate(s.x,s.y);
+    fctx.rotate(a.angle+camera.angle);
+    drawAsteroidShape(fctx,r,a);
+    fctx.restore();
+  });
+}
+function drawAsteroidTrajectory(a){
+  const body=BODIES_BY_KEY[a.homeKey];
+  if(!body) return;
+  const bpos=planetPositionAt(body,simTime);
+  const co=Math.cos(a.orient), so=Math.sin(a.orient);
+  const N=48;
+  fctx.beginPath();
+  for(let i=0;i<=N;i++){
+    const theta=-a.thetaE+(2*a.thetaE)*(i/N);
+    const r=2*a.rp/(1+Math.cos(theta));
+    const cosT=Math.cos(theta), sinT=Math.sin(theta);
+    const px=r*cosT, py=r*sinT;
+    let rx=px*co-py*so, ry=px*so+py*co;
+    if(a.mirrored) ry=-ry;
+    const s=worldToScreen(bpos.x+rx,bpos.y+ry);
+    if(i===0) fctx.moveTo(s.x,s.y); else fctx.lineTo(s.x,s.y);
+  }
+  fctx.strokeStyle=hexToRgba(a.color,0.35); fctx.lineWidth=1; fctx.stroke();
+}
+function drawAsteroidTrajectories(){ asteroids.forEach(drawAsteroidTrajectory); }
+function drawAsteroidSOICircle(a){
+  const s=worldToScreen(a.pos.x,a.pos.y);
+  const r=a.soi/camera.metersPerPixel;
+  if(r<3||r>Math.max(_frameCW,_frameCH)*6) return;
+  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
+  fctx.setLineDash([6,4]);
+  fctx.strokeStyle=hexToRgba(a.color,0.3); fctx.lineWidth=1; fctx.stroke();
+  fctx.setLineDash([]);
+}
+function drawAsteroidSOICircles(){ asteroids.forEach(drawAsteroidSOICircle); }
+function landShipOnAsteroid(f,a,apos,nx,ny,groundR,avx,avy){
+  const wx=nx*groundR, wy=ny*groundR;
+  f.pos.x=apos.x+wx; f.pos.y=apos.y+wy;
+  f.landedRelPos=asteroidFrameFlip(a.angle,wx,wy);
+  f.status='landed'; f.statusMsg='Landed safely on an asteroid.'; shipListDirty=true;
+  f.landedOnPlanet=null; f.landedOnAsteroid=a;
+  f.vel.x=avx; f.vel.y=avy;
+  f.angle=Math.atan2(nx,ny);
+  f.landedFacingLocal=f.angle-a.angle;
+  f.engineOn=false; if(f===activeShip()) updateEngineBtn();
+}
+function drawAsteroidArrows(){
+  if(!asteroids.length) return;
+  _edgeArrowCW=flightCanvas.clientWidth; _edgeArrowCH=flightCanvas.clientHeight;
+  const halfDiag=Math.hypot(_edgeArrowCW,_edgeArrowCH)/2;
+  asteroids.forEach(a=>{
+    const homeBody=BODIES_BY_KEY[a.homeKey];
+    if(!homeBody) return;
+    if(!(camera.metersPerPixel*halfDiag>homeBody.soi*ASTEROID_ARROW_SOI_FRAC)) return;
+    drawEdgeArrowTo({pos:a.pos,color:a.color,name:'Asteroid ('+fmtDist(a.radiusM*2)+')',dist:Math.hypot(a.pos.x-camera.x,a.pos.y-camera.y)});
+  });
+}
+
 // fires every individually enabled engine still
 function fireEnginesAndDrainFuel(f,dt){
   if(!f.engineOn) return 0;
@@ -3544,7 +3975,7 @@ function shipDragMult(f){
   return m;
 }
 
-//prevent clipping through solid planets
+//prevent clipping through solid planets and by extension new asteroids.
 function checkTunnelCollisions(f,domBody,tNew){
   for(const p of PLANETS){
     if(!p.solid||p===domBody) continue;
@@ -3557,15 +3988,31 @@ function checkTunnelCollisions(f,domBody,tNew){
       f.pos.x=ppos.x+nx*groundR; f.pos.y=ppos.y+ny*groundR;
       const pVelNew=planetVelocityAt(p,tNew);
       const relSpeed=Math.hypot(f.vel.x-pVelNew.x,f.vel.y-pVelNew.y);
-      if(relSpeed<=SAFE_LANDING_SPEED){
+      if(cheats.indestructible||relSpeed<=SAFE_LANDING_SPEED){
         f.status='landed'; f.statusMsg='Landed safely on '+p.name+'.'; shipListDirty=true;
-        f.landedOnPlanet=p; f.landedRelPos={x:nx*groundR,y:ny*groundR};
+        f.landedOnPlanet=p; f.landedOnAsteroid=null; f.landedRelPos={x:nx*groundR,y:ny*groundR};
         f.vel.x=pVelNew.x; f.vel.y=pVelNew.y;
         f.angle=Math.atan2(nx,ny); 
         f.engineOn=false; if(f===activeShip()) updateEngineBtn();
       } else {
         destroyShip(f,f.name+' was destroyed on impact with '+p.name+' at '+relSpeed.toFixed(0)+' u/s.');
       }
+      return;
+    }
+  }
+  for(const a of asteroids){
+    if(a===domBody) continue;
+    const apos=planetPositionAt(a,tNew);
+    const dx=f.pos.x-apos.x, dy=f.pos.y-apos.y;
+    const d=Math.hypot(dx,dy);
+    const foot=shipFootOffset(f);
+    const groundR=bodySurfaceRadius(a,dx,dy)+foot;
+    if(d<=groundR){
+      const nx=dx/(d||1), ny=dy/(d||1);
+      const avel=planetVelocityAt(a,tNew);
+      const relSpeed=Math.hypot(f.vel.x-avel.x,f.vel.y-avel.y);
+      if(cheats.indestructible||relSpeed<=SAFE_LANDING_SPEED) landShipOnAsteroid(f,a,apos,nx,ny,groundR,avel.x,avel.y);
+      else destroyShip(f,f.name+' was destroyed on impact with an asteroid at '+relSpeed.toFixed(0)+' u/s.');
       return;
     }
   }
@@ -3617,6 +4064,8 @@ function integrate(f,dt,t,domIn){
       }
     }
     f._inAtmo=inAtmo;
+    applyAeroHeating(f,dt);
+    if(f._pendingRemoval) return;
 
     // Engine thrust — each enabled engine draws only from its connected tank(s)
     const activeThrust=fireEnginesAndDrainFuel(f,dt);
@@ -3657,15 +4106,20 @@ function integrate(f,dt,t,domIn){
     if(dom.p.solid){
       const newRdist=Math.hypot(rx,ry);
       const foot=shipFootOffset(f);
-      const groundR=dom.p.radius+foot+groundPadOffset(dom.p);
+      const groundR=bodySurfaceRadius(dom.p,rx,ry)+foot+groundPadOffset(dom.p);
       if(newRdist<=groundR){
         const nx=rx/(newRdist||1), ny=ry/(newRdist||1);
+        const relSpeed=Math.hypot(rvx,rvy);
+        if(dom.p.isAsteroid){
+          if(cheats.indestructible||relSpeed<=SAFE_LANDING_SPEED) landShipOnAsteroid(f,dom.p,pPosNew,nx,ny,groundR,pVelNew.x,pVelNew.y);
+          else destroyShip(f,f.name+' was destroyed on impact with an asteroid at '+relSpeed.toFixed(0)+' u/s.');
+          return;
+        }
         f.pos.x=pPosNew.x+nx*groundR;
         f.pos.y=pPosNew.y+ny*groundR;
-        const relSpeed=Math.hypot(rvx,rvy);
-        if(relSpeed<=SAFE_LANDING_SPEED){
+        if(cheats.indestructible||relSpeed<=SAFE_LANDING_SPEED){
           f.status='landed'; f.statusMsg='Landed safely on '+dom.p.name+'.'; shipListDirty=true;
-          f.landedOnPlanet=dom.p;
+          f.landedOnPlanet=dom.p; f.landedOnAsteroid=null;
           f.landedRelPos={x:nx*groundR, y:ny*groundR};
           f.vel.x=pVelNew.x; f.vel.y=pVelNew.y;
           f.angle=Math.atan2(nx,ny); 
@@ -4124,14 +4578,17 @@ function drawEdgeArrowTo(target){
   fctx.fillStyle=target.color; fctx.fillText(label,lx,ly);
   fctx.restore();
 }
-// Concenctrated all alpha cent stars arrow into one arrow group bc that was annoying
-const ALPHA_CEN_GROUP=[ALPHA_CEN_A,ALPHA_CEN_B,PROXIMA];
+// Concenctrated all alpha cent stars arrow into one arrow group bc that was annoying - edit: old. now groups any arrows
+const _shownArrowGroups=new Set();
 function drawEdgeArrows(t){
   if(!shouldShowEdgeArrows()) return;
+  _shownArrowGroups.clear();
   STAR_BODIES.forEach(st=>{
-    if(ALPHA_CEN_GROUP.includes(st)){
-      if(st!==ALPHA_CEN_A) return;
-      drawEdgeArrowTo(edgeArrowGroupTarget(ALPHA_CEN_GROUP,t,'Alpha Centauri'));
+    if(st.arrowGroup){
+      if(_shownArrowGroups.has(st.arrowGroup)) return;
+      _shownArrowGroups.add(st.arrowGroup);
+      const members=STAR_BODIES.filter(s=>s.arrowGroup===st.arrowGroup);
+      drawEdgeArrowTo(edgeArrowGroupTarget(members,t,st.arrowGroupLabel));
       return;
     }
     const pos=planetPositionAt(st,t);
@@ -4199,10 +4656,12 @@ function drawPlanet(p,t,viewerPos){
 
   if(p.atmo){
     const atmoR=p.solid?r*(1+(p.atmoFrac||0)):r*1.08;
-    const glow=fctx.createRadialGradient(s.x,s.y,r*0.85,s.x,s.y,atmoR);
-    glow.addColorStop(0,'rgba(180,210,255,0.20)');
-    glow.addColorStop(1,'rgba(180,210,255,0)');
-    fctx.beginPath(); fctx.arc(s.x,s.y,atmoR,0,Math.PI*2); fctx.fillStyle=glow; fctx.fill();
+    if(atmoR<Math.max(CW,CH)*ATMO_GLOW_MAX_PX_MULT){
+      const glow=fctx.createRadialGradient(s.x,s.y,r*0.85,s.x,s.y,atmoR);
+      glow.addColorStop(0,'rgba(180,210,255,0.20)');
+      glow.addColorStop(1,'rgba(180,210,255,0)');
+      fctx.beginPath(); fctx.arc(s.x,s.y,atmoR,0,Math.PI*2); fctx.fillStyle=glow; fctx.fill();
+    }
   }
   fctx.save();
   fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.closePath(); fctx.clip();
@@ -4512,6 +4971,34 @@ function drawShip(sh){
         fctx.fillRect(cx-bw/2,cy+eff.h*detailScale*0.12,bw,bh);
       });
     }
+    // gradient orange for heating parts
+    if(sh.partHeat){
+      const axis=sh._heatAxisLocal||{x:0,y:-1};
+      sh.parts.forEach(pp=>{
+        const heat=sh.partHeat[pp.uid];
+        if(!heat||heat<=0.001) return;
+        const frac=Math.max(0,Math.min(1,heat/HEAT_PART_LIMIT));
+        const d=PARTS[pp.id];
+        const eff=effDims(pp.id,partRot(pp));
+        const cx=((pp.col-sh.sprite.minC+eff.w/2)-sh.sprite.comXc)*detailScale;
+        const cy=((pp.row-sh.sprite.minR+eff.h/2)-sh.sprite.comYc)*detailScale;
+        const w=eff.w*detailScale, h=eff.h*detailScale;
+        const reach=Math.max(w,h)*0.5;
+        const gx0=cx-axis.x*reach, gy0=cy-axis.y*reach;
+        const gx1=cx+axis.x*reach, gy1=cy+axis.y*reach;
+        const grad=fctx.createLinearGradient(gx0,gy0,gx1,gy1);
+        grad.addColorStop(0,'rgba(255,120,20,0)');
+        grad.addColorStop(0.55,`rgba(255,120,20,${(frac*0.35).toFixed(2)})`);
+        grad.addColorStop(1,`rgba(255,${Math.round(220-frac*140)},${Math.round(60-frac*40)},${(frac*0.9).toFixed(2)})`);
+        fctx.save();
+        fctx.beginPath();
+        buildPartShapePath(fctx,d,cx-w/2,cy-h/2,w,h); // clip to part textr
+        fctx.clip();
+        fctx.fillStyle=grad;
+        fctx.fillRect(cx-w/2,cy-h/2,w,h);
+        fctx.restore();
+      });
+    }
     if(sh.chuteDeployed){
       fctx.strokeStyle='rgba(230,230,230,0.85)';
       fctx.lineWidth=Math.max(1,detailScale*0.06);
@@ -4658,6 +5145,8 @@ function render(){
   PLANETS.forEach(p=>drawOrbitPath(p,simTime));
   STAR_BODIES.forEach(st=>drawSOICircle(st,simTime)); //more stars support.
   PLANETS.forEach(p=>drawSOICircle(p,simTime));
+  drawAsteroidTrajectories();
+  drawAsteroidSOICircles();
   const visibleBodies=cullOverlappingBodies();
   STAR_BODIES.forEach(st=>{ if(visibleBodies.has(st)) drawStar(st,simTime); });
   PLANETS.forEach(p=>{ if(visibleBodies.has(p)) drawPlanet(p,simTime,{x:camera.x,y:camera.y}); });
@@ -4666,8 +5155,10 @@ function render(){
   if(cheats.navBeacon) drawNavBeaconPath();
   if(cheats.navBeacon&&navDeltaV) drawNavBurnMarker();
   ships.forEach(drawShip);
+  drawAsteroids();
   if(cheats.navBeacon&&activeSh&&activeSh.status==='flying') drawNavArrow(activeSh);
   drawEdgeArrows(simTime);
+  drawAsteroidArrows(); // star arrow but for asteroid
 
   const sh=activeSh;
   if(sh){
@@ -4678,7 +5169,7 @@ function render(){
       const pv=planetVelocityAt(sh._domBody,simTime);
       const speed=Math.hypot(sh.vel.x-pv.x,sh.vel.y-pv.y);
       hud.speed.textContent=fmtSpeed(speed);
-      const alt=Math.hypot(sh.pos.x-ppos.x,sh.pos.y-ppos.y)-sh._domBody.radius;
+      const alt=Math.hypot(sh.pos.x-ppos.x,sh.pos.y-ppos.y)-bodySurfaceRadius(sh._domBody,sh.pos.x-ppos.x,sh.pos.y-ppos.y);
       hud.altLabel.textContent='Alt ('+sh._domBody.name+')';
       hud.alt.textContent=fmtDist(alt);
       hud.soi.textContent=sh._domBody.name+(sh._inAtmo?' — atmosphere':'');
@@ -4745,6 +5236,19 @@ function atmoTrack(tIn){
   const T=t;
   const e=(T*(t^t/6%64))%256*(1-t%2048/2048)*'0010'[(t>>11)%4];
   return [byteToSample(a/3.5+(c/2-170)+d+(e/3.99)), byteToSample(a/4.5+(c/2-160)+d+(e/4.01))];
+}
+// 53140Hz mono bytebeat — "Mooneurofunk" — played while inside a moon's SOI or an asteroid's SOI.
+// close cousin of atmoTrack above, just re-tuned/re-timed for the moon/asteroid theme.
+function moonEurofunkTrack(t){
+  t/=6.4;
+  const k=t>>10&7,l=t>>10&3;
+  const o='1421241424242412'[t>>11&15];
+  const p=(100+(255&t*((t&4096?t%65536<59392?7:t&7:16)+(1&t>>14))>>(3&-t>>(t&2048?2:10)))*(2==k?3:2==~l?1:-2/3*k)/12
+    +(-t*['87',[8.5,8]][~t>>12&1][~t>>14&1]/4&128)/3
+    +(2.7**(-t*o/512%8+8)/o&64)
+    +Math.random()*(255&-t>>2)*(255&t>>4)/800
+    +1E5/(t&2047)%64)/1.2;
+  return byteToSample(p*p>>16?255:p>>16?0:p);
 }
 // 48kHz mono bytebeat — played while coasting between planets (no SOI).
 function interplanetaryTrack(t){
@@ -4883,14 +5387,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
   }
   constructor(){
     super();
-    this.gains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
-    this.targetGains={atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
-    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfBuild=0; this.tfSignal=0; 
+    this.gains={atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
+    this.targetGains={atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfMoonEurofunk=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfBuild=0; this.tfSignal=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
-        this.targetGains={atmo:0,interplanetary:0,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
+        this.targetGains={atmo:0,interplanetary:0,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
         this.targetGains[d.value]=1;
       }
     };
@@ -4900,14 +5404,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rBuild=56000/sampleRate, rSignal=44100/sampleRate;
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rMoonEurofunk=53140/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rBuild=56000/sampleRate, rSignal=44100/sampleRate;
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
         if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
         else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
       }
-      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; this.tfBuild+=rBuild; this.tfSignal+=rSignal; 
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfMoonEurofunk+=rMoonEurofunk; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; this.tfBuild+=rBuild; this.tfSignal+=rSignal; 
       let l=0,r=0;
       if(this.gains.atmo>0.0005){
         const s=atmoTrack(Math.floor(this.tfAtmo));
@@ -4919,6 +5423,10 @@ class BytebeatProcessor extends AudioWorkletProcessor {
       }
       if(this.gains.soi>0.0005){
         const s=soiTrack(Math.floor(this.tfSoi))*this.gains.soi;
+        l+=s; r+=s;
+      }
+      if(this.gains.moonEurofunk>0.0005){
+        const s=moonEurofunkTrack(Math.floor(this.tfMoonEurofunk))*this.gains.moonEurofunk;
         l+=s; r+=s;
       }
       if(this.gains.interstellar>0.0005){
@@ -4953,7 +5461,7 @@ let musicCtx=null, musicNode=null, musicVolume=0.35, musicLastState=null, musicS
 // fix chromebook fallback
 let musicScriptNode=null, musicFallbackState=null, musicFallbackFns=null;
 // Main Menu has no flight state to key music off of, so it cycles through every track instead.
-const MENU_MUSIC_ORDER=['atmo','soi','interplanetary','interstellar','nightVision','tauCeti'];
+const MENU_MUSIC_ORDER=['atmo','soi','moonEurofunk','interplanetary','interstellar','nightVision','tauCeti'];
 const MENU_MUSIC_CYCLE_MS=120000; // 2 minutes per track
 let menuMusicCycleAnchor=null;
 function resetMenuMusicCycle(){ menuMusicCycleAnchor=null; }
@@ -4968,16 +5476,16 @@ function currentMusicState(){
   if(el('menuScreen').classList.contains('active')) return menuMusicState();
   const sh=activeShip();
   if(sh&&sh.status==='flying'){
-    if(sh._domBody===ALPHA_CEN_A||sh._domBody===ALPHA_CEN_B||sh._domBody===PROXIMA) return 'nightVision';
-    if(sh._domBody===TAU_CETI||TAU_CETI_PLANETS.includes(sh._domBody)) return sh._inAtmo?'atmo':'tauCeti';
-    if(sh._domBody===GLIESE876||GLIESE876_PLANETS.includes(sh._domBody)) return sh._inAtmo?'atmo':'signal';
-    if(sh._domBody&&sh._domBody!==SUN_BODY) return sh._inAtmo?'atmo':'soi';
-    if(sh._domBody===SUN_BODY) return 'interplanetary';
+    const b=sh._domBody;
+    // better music func yay
+    if(b&&b.musicTheme!==undefined) return (b.musicUsesAtmo&&sh._inAtmo)?'atmo':b.musicTheme;
+    if(b&&b!==SUN_BODY) return sh._inAtmo?'atmo':'soi';
+    if(b===SUN_BODY) return 'interplanetary';
     return 'interstellar';
   }
   return 'interplanetary';
 }
-const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',build:'Assembly Line',signal:'Signal of Distress'};
+const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',moonEurofunk:'Mooneurofunk',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',build:'Assembly Line',signal:'Signal of Distress'};
 function updateMusicState(){
   if(!musicNode&&!musicFallbackState) return;
   const st=currentMusicState();
@@ -4988,7 +5496,7 @@ function updateMusicState(){
       musicNode.port.postMessage({type:'state',value:st});
     }else if(musicFallbackState){
       const tg=musicFallbackState.targetGains;
-      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.build=0; tg.signal=0;
+      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.moonEurofunk=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.build=0; tg.signal=0;
       tg[st]=1;
     }
   }
@@ -5022,19 +5530,19 @@ function startMusicEngineFallback(){
     musicCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(!musicFallbackFns){
       musicFallbackFns=new Function(BYTEBEAT_TRACKS_SRC+
-        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack};')();
+        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,moonEurofunkTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack};')();
     }
-    const {atmoTrack,interplanetaryTrack,soiTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack}=musicFallbackFns;
+    const {atmoTrack,interplanetaryTrack,soiTrack,moonEurofunkTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack}=musicFallbackFns;
     const sr=musicCtx.sampleRate;
     const st={
-      gains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
-      targetGains:{atmo:0,interplanetary:1,soi:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
-      tfAtmo:0,tfInter:0,tfSoi:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfBuild:0,tfSignal:0,
+      gains:{atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
+      targetGains:{atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
+      tfAtmo:0,tfInter:0,tfSoi:0,tfMoonEurofunk:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfBuild:0,tfSignal:0,
       fadeStep:1/(FADE_SECONDS*sr),
       vol:musicVolume,
     };
     musicFallbackState=st;
-    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rBuild=56000/sr, rSignal=44100/sr;
+    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rMoonEurofunk=53140/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rBuild=56000/sr, rSignal=44100/sr;
     // ScriptProcessorNode runs on the main thread (unlike AudioWorkletNode, our primary path above,
     // which has its own realtime thread), so it competes with physics/render for CPU time. A bigger
     // buffer only delays underruns, it can't prevent them - when the main thread does stall long enough,
@@ -5058,7 +5566,7 @@ function startMusicEngineFallback(){
           if(st.gains[k]<st.targetGains[k]) st.gains[k]=Math.min(st.targetGains[k],st.gains[k]+st.fadeStep);
           else if(st.gains[k]>st.targetGains[k]) st.gains[k]=Math.max(st.targetGains[k],st.gains[k]-st.fadeStep);
         }
-        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti; st.tfBuild+=rBuild; st.tfSignal+=rSignal;
+        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfMoonEurofunk+=rMoonEurofunk; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti; st.tfBuild+=rBuild; st.tfSignal+=rSignal;
         let l=0,r=0;
         if(st.gains.atmo>0.0005){
           const s=atmoTrack(Math.floor(st.tfAtmo));
@@ -5070,6 +5578,10 @@ function startMusicEngineFallback(){
         }
         if(st.gains.soi>0.0005){
           const s=soiTrack(Math.floor(st.tfSoi))*st.gains.soi;
+          l+=s; r+=s;
+        }
+        if(st.gains.moonEurofunk>0.0005){
+          const s=moonEurofunkTrack(Math.floor(st.tfMoonEurofunk))*st.gains.moonEurofunk;
           l+=s; r+=s;
         }
         if(st.gains.interstellar>0.0005){
@@ -5149,6 +5661,10 @@ function loopInner(now){
   updateMusicState();
   const realDt=Math.min(0.05,(now-lastT)/1000);
   lastT=now;
+  if(!el('menuScreen').classList.contains('active')){
+    totalPlaySeconds+=realDt;
+    updateCheatsToggleRowVisibility();
+  }
   // dev
   if(devToolVisible){
     devMsPerFrame=realDt*1000;
@@ -5173,6 +5689,31 @@ function loopInner(now){
     sh._prevDomBody=sh._domBody;
   }
 
+  {
+    const homeBody=sh?asteroidEffectiveHome(sh._domBody):null;
+    const homeKey=homeBody?homeBody.key:null;
+    if(homeKey!==_lastAsteroidTriggerKey){
+      _lastAsteroidTriggerKey=homeKey;
+      if(homeBody&&Math.random()<ASTEROID_SPAWN_CHANCE){
+        const a=spawnAsteroidAt(homeBody,simTime);
+        if(a){
+          asteroids.push(a);
+          while(asteroids.length>ASTEROID_MAX_COUNT){
+            // bye old asteroid new one needs space boi
+            let oldestIdx=-1;
+            for(let i=0;i<asteroids.length;i++){
+              if(asteroidHasOccupant(asteroids[i])) continue;
+              if(oldestIdx===-1||asteroids[i].spawnedAt<asteroids[oldestIdx].spawnedAt) oldestIdx=i;
+            }
+            if(oldestIdx===-1) break;
+            unregisterAsteroidBody(asteroids[oldestIdx]); // get out of planet tree
+            asteroids.splice(oldestIdx,1);
+          }
+        }
+      }
+    }
+  }
+
   // nav beacon auto drop timewarp before
   if(cheats.navBeacon&&navDeltaV&&navTargetPlanet&&sh&&sh.status==='flying'&&warp>1&&!navBurnWarpDropped){
     const projected=simTime+realDt*warp;
@@ -5195,6 +5736,8 @@ function loopInner(now){
   const tStart=simTime;
   simTime+=simSeconds;
 
+  updateAsteroids(simSeconds,tStart);
+
   ships.forEach(s=>{
     if(s.status==='flying'){
       stepSimSeconds(s,simSeconds,tStart); pushTrail(s);
@@ -5216,6 +5759,24 @@ function loopInner(now){
       const ppos=planetPositionAt(s.landedOnPlanet,simTime);
       s.pos.x=ppos.x+s.landedRelPos.x;
       s.pos.y=ppos.y+s.landedRelPos.y;
+    } else if(s.status==='landed'&&s.landedOnAsteroid&&s.landedRelPos&&asteroids.includes(s.landedOnAsteroid)){
+      // keep landed ships glued to their asteroid as it flies its path AND spins. terrible to code ngl
+      const a=s.landedOnAsteroid;
+      // Wheel driving — rotate the landed position around the asteroid, within its local shape frame
+      // (rotating a point inside that frame is a plain rotation; the flip only matters at the world boundary)
+      if(s===activeShip()&&(keys['a']||keys['d'])&&s.parts.some(pp=>PARTS[pp.id].type==='wheel')){
+        const r=Math.hypot(s.landedRelPos.x,s.landedRelPos.y)||1;
+        const dAng=(WHEEL_SPEED*realDt/r)*(keys['d']?1:-1);
+        const cx=s.landedRelPos.x/r, cy=s.landedRelPos.y/r;
+        const nx=cx*Math.cos(dAng)-cy*Math.sin(dAng);
+        const ny=cx*Math.sin(dAng)+cy*Math.cos(dAng);
+        s.landedRelPos={x:nx*r,y:ny*r};
+        s.landedFacingLocal=Math.atan2(ny,nx)+Math.PI/2;
+      }
+      const world=asteroidFrameFlip(a.angle,s.landedRelPos.x,s.landedRelPos.y); // local -> world (self-inverse)
+      s.pos.x=a.pos.x+world.x;
+      s.pos.y=a.pos.y+world.y;
+      s.angle=a.angle+(s.landedFacingLocal||0);
     }
     if(s.status!=='crashed') chargeIonStorage(s,simSeconds,simTime);
     if(s.status!=='crashed') runFuelCompressors(s,simSeconds);
@@ -5307,7 +5868,7 @@ function loopInner(now){
   }
 
   frameCount++;
-  if(frameCount%60===0) saveShips();
+  if(frameCount%60===0){ saveShips(); saveSettings(); }
 
   if(el('flightScreen').classList.contains('active')){
     render();
