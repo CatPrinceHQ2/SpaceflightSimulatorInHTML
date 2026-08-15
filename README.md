@@ -1,6 +1,6 @@
 - **Easily Moddable** Just change numbers around. It does stuff. Claude wrote some of the code comments for me. Couldn't be bothered to do it myself.
 
-**Song creds** - Nullify, New Beginnings belong to https://www.reddit.com/user/Gallium-Gonzollium/ Neurofunk Remastered, Neurofunk remix again (Mooneurofunk) goes to https://www.reddit.com/user/NewFall2020/, Frozen Planet (Signal Of Distress), Through The Star System goes to https://www.reddit.com/user/SthephanShi/, Night Vision goes to https://battleofthebits.com/barracks/Profile/absolutegalaxy/, and I lost the credits to the others (that's "Wander Through The Sky" and "Assembly Line" — if you know, tell me). PLEASE let me know if you own the bytebeat tracks for Tau Ceti's track or Build Area's track.
+**Song creds** - Nullify, New Beginnings belong to https://www.reddit.com/user/Gallium-Gonzollium/ Neurofunk Remastered, Neurofunk remix again (Mooneurofunk) goes to https://www.reddit.com/user/NewFall2020/, Frozen Planet (Signal Of Distress), Through The Star System goes to https://www.reddit.com/user/SthephanShi/, Night Vision goes to https://battleofthebits.com/barracks/Profile/absolutegalaxy/, Niarix Visions (Sight of the Radiant Shine) by https://www.reddit.com/user/lhphr/ and I lost the credits to the others (that's "Wander Through The Sky" and "Assembly Line". PLEASE let me know if you own those tracks.
 
 # It's spaceflight sim cuh
 
