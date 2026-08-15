@@ -343,7 +343,7 @@
             <a href="https://discord.gg/catprincehq" target="_blank" rel="noopener"><span class="ic">💬</span>Discord</a>
             <a href="https://www.tiktok.com/@catprince.hq?lang=en" target="_blank" rel="noopener"><span class="ic">♫</span>Tiktok</a>
           </div>
-          <div class="menu-version">SFSIHTML vR.1.3.2</div>
+          <div class="menu-version">SFSIHTML vR1.4.1</div>
         </div>
       </div>
     </div>
@@ -874,6 +874,26 @@ const GLIESE876_PLANETS = buildPlanets(GLIESE876_PLANET_DEFS, GLIESE876, {gmBoos
 const GLIESE876_MAX_EXTENT = (GLIESE876.soi+GLIESE876_PLANETS[GLIESE876_PLANETS.length-1].distance+GLIESE876_PLANETS[GLIESE876_PLANETS.length-1].soi)*1.5;
 registerStarSystem({anchorPos:GLIESE876_POS, maxExtent:GLIESE876_MAX_EXTENT});
 
+// black HOOLE
+const SGR_A_DIST_AU = ALPHA_CEN_GAME_DIST_AU*6070; // 6070 lol LOL LOL6767676767
+const SGR_A_DIR_ANGLE = ALPHA_CEN_DIR_ANGLE + 200*Math.PI/180;
+const SGR_A_POS = {x:SGR_A_DIST_AU*AU*Math.cos(SGR_A_DIR_ANGLE), y:SGR_A_DIST_AU*AU*Math.sin(SGR_A_DIR_ANGLE)};
+const SGR_A_RADIUS = 0.207*BODIES_BY_KEY['mercury'].distance; // i dont know WHY i did this.
+const GM_SGR_A = 83000000*GM_SUN;
+
+const SAGITTARIUS_A = registerStar({
+  key:'sagittariusA', name:'Sagittarius A*',
+  parent:null, pos:SGR_A_POS,
+  color:'#0a0a0a', groundColor:null,
+  radius:SGR_A_RADIUS,
+  GM:GM_SGR_A, GMbase:GM_SGR_A,
+  solid:false, atmo:true, atmoColor:'#ffb020', atmoFrac:40, // Atmo acts as the accretion disk. Saves a new function
+  arrowColor:'#ff33d6',
+  musicTheme:'sgrA',
+});
+SAGITTARIUS_A.soi = SGR_A_DIST_AU*AU*0.0175;
+registerStarSystem({anchorPos:SGR_A_POS, maxExtent:SAGITTARIUS_A.soi*1.5});
+
 const BODY_CHILDREN = {};
 PLANETS.forEach(p=>{
   if(!BODY_CHILDREN[p.parent]) BODY_CHILDREN[p.parent]=[];
@@ -1081,12 +1101,18 @@ function roundRectPath(ctx,x,y,w,h,r){
   ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
   ctx.closePath();
 }
+const _shadeColorCache={};
 function shadeColor(hex,amt){
+  const key=hex+'|'+amt;
+  const cached=_shadeColorCache[key];
+  if(cached!==undefined) return cached;
   const c=hex.replace('#','');
   const num=parseInt(c,16);
   let r=(num>>16)+Math.round(255*amt),g=((num>>8)&0xff)+Math.round(255*amt),b=(num&0xff)+Math.round(255*amt);
   r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
-  return 'rgb('+r+','+g+','+b+')';
+  const out='rgb('+r+','+g+','+b+')';
+  _shadeColorCache[key]=out;
+  return out;
 }
 // Base path shape for a part — factored out so both drawPartShape (fill/stroke) - edit reused for heating re-entry 
 function buildPartShapePath(ctx,d,x,y,w,h){
@@ -2982,10 +3008,37 @@ el('cheatIndestructible').onchange=e=>{ cheats.indestructible=e.target.checked; 
     o.value=p.key; o.textContent=p.name;
     sel.appendChild(o);
   });
+  {
+    const o=document.createElement('option');
+    o.value=SAGITTARIUS_A.key; o.textContent=SAGITTARIUS_A.name;
+    sel.appendChild(o);
+  }
   sel.onchange=()=>{
     const key=sel.value; if(!key) return;
     const body=BODIES_BY_KEY[key]; if(!body) return;
     const sh=activeShip(); if(!sh){ showToast('No active ship'); sel.value=''; return; }
+    if(body===SAGITTARIUS_A){
+      const bpos=body.pos||SGR_A_POS;
+      const bvel=body.vel||{x:0,y:0};
+      const ang=Math.random()*Math.PI*2;
+      const SPAWN_DIST=100000000000;
+      sh.pos.x=bpos.x+Math.cos(ang)*SPAWN_DIST;
+      sh.pos.y=bpos.y+Math.sin(ang)*SPAWN_DIST;
+      sh.vel.x=bvel.x; sh.vel.y=bvel.y;
+      sh.angle=Math.atan2(Math.cos(ang),Math.sin(ang));
+      sh.status='flying'; sh.statusMsg='';
+      sh.landedOnPlanet=null; sh.landedRelPos=null; sh.landedOnAsteroid=null;
+      sh._inAtmo=false;
+      sh._domBody=body;
+      sh.engineOn=false;
+      camera.x=sh.pos.x; camera.y=sh.pos.y;
+      if(typeof setCamFree==='function') setCamFree(false);
+      camera.metersPerPixel=Math.min(40, body.radius/60);
+      sel.value='';
+      showToast('Teleported near '+body.name);
+      updateEngineBtn(); updateChuteBtn();
+      return;
+    }
     const ppos=planetPositionAt(body,simTime);
     const pvel=planetVelocityAt(body,simTime);
     // Surface-normal from planet center (works for any SOI, not just sun-facing)
@@ -3293,12 +3346,21 @@ function setCamFree(on){
 }
 
 // Zoom with scroll wheel (max meters-per-pixel bounded below for system-view scale)
+const ZOOM_MPP_ABS_MAX = 44000000000;
+const ZOOM_MPP_DEEPSPACE_MAX = ZOOM_MPP_ABS_MAX*1000; 
+const ZOOM_MPP_STARSOI_MAX = ZOOM_MPP_ABS_MAX/10;
+function computeMaxZoomOutMpp(sh){
+  if(sh&&sh._inAtmo&&!camFree) return atmoZoomMaxMpp(sh._domBody);
+  const dom=findDominantBody({x:camera.x,y:camera.y},simTime);
+  if(!dom||dom.p===SAGITTARIUS_A) return ZOOM_MPP_DEEPSPACE_MAX;
+  return ZOOM_MPP_STARSOI_MAX;
+}
 flightCanvas.addEventListener('wheel',e=>{
   const sh=activeShip();
   if(!sh) return;
   e.preventDefault();
   const factor=e.deltaY>0?1.15:0.8695652173913043;
-  const maxMpp=(sh._inAtmo&&!camFree)?atmoZoomMaxMpp(sh._domBody):44000000000;
+  const maxMpp=computeMaxZoomOutMpp(sh);
   camera.metersPerPixel=Math.max(0.02,Math.min(maxMpp,camera.metersPerPixel*factor));
 },{passive:false});
 
@@ -3344,12 +3406,14 @@ flightCanvas.addEventListener('mousedown',e=>{
 });
 
 // world screen coordinate conversion worldtoscreen rotates
+let _wtsAngle=null,_wtsCos=1,_wtsSin=0;
 function worldToScreen(wx,wy){
   const cw=_frameCW||flightCanvas.clientWidth, ch=_frameCH||flightCanvas.clientHeight;
   const dx=(wx-camera.x)/camera.metersPerPixel;
   const dy=-(wy-camera.y)/camera.metersPerPixel;
   const a=camera.angle;
-  const cos=Math.cos(a), sin=Math.sin(a);
+  if(a!==_wtsAngle){ _wtsAngle=a; _wtsCos=Math.cos(a); _wtsSin=Math.sin(a); }
+  const cos=_wtsCos, sin=_wtsSin;
   // Rotate world displacement by +camera.angle so the ship's heading = screen-up
   return {
     x: cw/2 + dx*cos - dy*sin,
@@ -3491,6 +3555,7 @@ function renderStarLayer(pxW,pxH,dpr){
 // PHYSICS
 // ============================================================
 function destroyShip(f,reason){
+  if(f._domBody===SAGITTARIUS_A) reason=f.name+' will never be seen again.';
   f.status='crashed'; f.statusMsg=reason; f.engineOn=false; f._pendingRemoval=true;
   if(f._isBeaconClone) return; // no UI side-effects for prediction clones
   shipListDirty=true;
@@ -3792,6 +3857,7 @@ function updateAsteroids(simSeconds,tStart){
 }
 
 // weird shape instead of sphere like planet yey
+const _asteroidGradCache=new Map();
 function drawAsteroidShape(ctx,r,a){
   const n=a.verts.length;
   ctx.beginPath();
@@ -3802,9 +3868,15 @@ function drawAsteroidShape(ctx,r,a){
     if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
   ctx.closePath();
-  const grad=ctx.createRadialGradient(-r*0.3,-r*0.3,Math.max(0.01,r*0.1),0,0,r*1.1);
-  grad.addColorStop(0,shadeColor(a.color,0.25));
-  grad.addColorStop(1,shadeColor(a.color,-0.35));
+  const rq=Math.round(r*2)/2;
+  const key=a.color+'|'+rq;
+  let grad=_asteroidGradCache.get(key);
+  if(!grad){
+    grad=ctx.createRadialGradient(-rq*0.3,-rq*0.3,Math.max(0.01,rq*0.1),0,0,rq*1.1);
+    grad.addColorStop(0,shadeColor(a.color,0.25));
+    grad.addColorStop(1,shadeColor(a.color,-0.35));
+    _asteroidGradCache.set(key,grad);
+  }
   ctx.fillStyle=grad; ctx.fill();
   ctx.lineWidth=1; ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.stroke();
 }
@@ -3845,7 +3917,8 @@ function drawAsteroidTrajectories(){ asteroids.forEach(drawAsteroidTrajectory); 
 function drawAsteroidSOICircle(a){
   const s=worldToScreen(a.pos.x,a.pos.y);
   const r=a.soi/camera.metersPerPixel;
-  if(r<3||r>Math.max(_frameCW,_frameCH)*6) return;
+  const maxDim=Math.max(_frameCW,_frameCH);
+  if(r<ORBIT_MIN_PX||r>maxDim*ORBIT_MAX_PX_MULT) return;
   fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
   fctx.setLineDash([6,4]);
   fctx.strokeStyle=hexToRgba(a.color,0.3); fctx.lineWidth=1; fctx.stroke();
@@ -4047,7 +4120,7 @@ function integrate(f,dt,t,domIn){
       } else if(rdist<dom.p.radius){
         const depth=1-(rdist/dom.p.radius);
         density=Math.min(1,depth*1.4); inAtmo=true;
-        if(depth>GAS_GIANT_CRUSH_DEPTH){
+        if(depth>GAS_GIANT_CRUSH_DEPTH&&(!cheats.indestructible||dom.p===SAGITTARIUS_A)){
           destroyShip(f,f.name+' was crushed deep in '+dom.p.name+'\u2019s atmosphere.');
           return;
         }
@@ -4592,23 +4665,58 @@ function drawEdgeArrows(t){
       return;
     }
     const pos=planetPositionAt(st,t);
-    drawEdgeArrowTo({pos,color:st.color,name:st.name,dist:Math.hypot(pos.x-camera.x,pos.y-camera.y)});
+    drawEdgeArrowTo({pos,color:st.arrowColor||st.color,name:st.name,dist:Math.hypot(pos.x-camera.x,pos.y-camera.y)});
   });
 }
 
 //I regeneralized this from draw sun. now we can have multiple stars
+const _starAtmoGlowCache=new Map();
+function getStarAtmoGlow(body,rq,atmoRq){
+  const key=body.key+'|'+rq+'|'+atmoRq;
+  let g=_starAtmoGlowCache.get(key);
+  if(g) return g;
+  const col=body.atmoColor||body.color;
+  g=fctx.createRadialGradient(0,0,rq*0.9,0,0,atmoRq);
+  g.addColorStop(0,hexToRgba(col,0.85));
+  g.addColorStop(0.15,hexToRgba(col,0.5));
+  g.addColorStop(0.4,hexToRgba(col,0.22));
+  g.addColorStop(1,hexToRgba(col,0));
+  _starAtmoGlowCache.set(key,g);
+  return g;
+}
+const _starBodyGradCache=new Map();
+function getStarBodyGradient(body,rq){
+  const key=body.key+'|'+rq;
+  let g=_starBodyGradCache.get(key);
+  if(g) return g;
+  g=fctx.createRadialGradient(-rq*0.3,-rq*0.3,rq*0.05,0,0,rq);
+  g.addColorStop(0,shadeColor(body.color,0.3));
+  g.addColorStop(1,shadeColor(body.color,-0.15));
+  _starBodyGradCache.set(key,g);
+  return g;
+}
 function drawStar(body,t){
   const pos=planetPositionAt(body,t);
   const s=worldToScreen(pos.x,pos.y);
-  const r=Math.max(1.2,body.radius/camera.metersPerPixel);
+  const trueR=body.radius/camera.metersPerPixel;
+  const r=Math.max(1.2,trueR);
   const CW=_frameCW, CH=_frameCH;
   if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
-  const grad=fctx.createRadialGradient(s.x-r*0.3,s.y-r*0.3,r*0.05,s.x,s.y,r);
-  grad.addColorStop(0,shadeColor(body.color,0.3));
-  grad.addColorStop(1,shadeColor(body.color,-0.15));
-  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.fillStyle=grad; fctx.fill();
+  const rq=Math.round(r*2)/2;
+  fctx.save();
+  fctx.translate(s.x,s.y);
+  if(body.atmo){
+    const atmoR=Math.max(r,trueR*(1+(body.atmoFrac||0)));
+    if(atmoR<Math.max(CW,CH)*ATMO_GLOW_MAX_PX_MULT){
+      const glow=getStarAtmoGlow(body,rq,Math.round(atmoR*2)/2);
+      fctx.beginPath(); fctx.arc(0,0,atmoR,0,Math.PI*2); fctx.fillStyle=glow; fctx.fill();
+    }
+  }
+  const grad=getStarBodyGradient(body,rq);
+  fctx.beginPath(); fctx.arc(0,0,r,0,Math.PI*2); fctx.fillStyle=grad; fctx.fill();
   if(r>2){ fctx.lineWidth=1; fctx.strokeStyle='rgba(255,255,255,0.12)'; fctx.stroke(); }
-  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText(body.name,s.x+r+4,s.y+4); }
+  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText(body.name,r+4,4); }
+  fctx.restore();
 }
 
 function drawOrbitPath(p,t){
@@ -4634,47 +4742,78 @@ function drawSOICircle(p,t){
   const pos=planetPositionAt(p,t);
   const s=worldToScreen(pos.x,pos.y);
   const r=p.soi/camera.metersPerPixel;
-  if(r<3||r>Math.max(_frameCW,_frameCH)*6) return;
+  const maxDim=Math.max(_frameCW,_frameCH);
+  if(r<ORBIT_MIN_PX||r>maxDim*ORBIT_MAX_PX_MULT) return;
+  const soiColor=p.arrowColor||p.color;
   fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
   fctx.setLineDash([8,6]);
-  fctx.strokeStyle=hexToRgba(p.color,0.35); fctx.lineWidth=1; fctx.stroke();
+  fctx.strokeStyle=hexToRgba(soiColor,0.35); fctx.lineWidth=1; fctx.stroke();
   fctx.setLineDash([]);
-  if(r>60){ fctx.fillStyle=hexToRgba(p.color,0.7); fctx.font='10px sans-serif'; fctx.fillText(p.name+' SOI',s.x+r+4,s.y); }
+  if(r>60){ fctx.fillStyle=hexToRgba(soiColor,0.7); fctx.font='10px sans-serif'; fctx.fillText(p.name+' SOI',s.x+r+4,s.y); }
 }
+const _hexToRgbaCache={};
 function hexToRgba(hex,a){
+  const key=hex+'|'+a;
+  const cached=_hexToRgbaCache[key];
+  if(cached!==undefined) return cached;
   const c=hex.replace('#','');
   const num=parseInt(c,16);
   const r=(num>>16)&0xff,g=(num>>8)&0xff,b=num&0xff;
-  return `rgba(${r},${g},${b},${a})`;
+  const out=`rgba(${r},${g},${b},${a})`;
+  _hexToRgbaCache[key]=out;
+  return out;
+}
+const _planetAtmoGlowCache=new Map();
+function getPlanetAtmoGlow(rq,atmoRq){
+  const key=rq+'|'+atmoRq;
+  let g=_planetAtmoGlowCache.get(key);
+  if(g) return g;
+  g=fctx.createRadialGradient(0,0,rq*0.85,0,0,atmoRq);
+  g.addColorStop(0,'rgba(180,210,255,0.20)');
+  g.addColorStop(1,'rgba(180,210,255,0)');
+  _planetAtmoGlowCache.set(key,g);
+  return g;
+}
+const _planetBodyGradCache=new Map();
+function getPlanetBodyGradient(color,rq){
+  const key=color+'|'+rq;
+  let g=_planetBodyGradCache.get(key);
+  if(g) return g;
+  g=fctx.createRadialGradient(-rq*0.32,-rq*0.32,rq*0.08,0,0,rq*1.05);
+  g.addColorStop(0,shadeColor(color,0.35));
+  g.addColorStop(0.55,color);
+  g.addColorStop(1,shadeColor(color,-0.35));
+  _planetBodyGradCache.set(key,g);
+  return g;
 }
 function drawPlanet(p,t,viewerPos){
   const pos=planetPositionAt(p,t);
   const s=worldToScreen(pos.x,pos.y);
-  const r=Math.max(1.2,p.radius/camera.metersPerPixel);
+  const trueR=p.radius/camera.metersPerPixel;
+  const r=Math.max(1.2,trueR);
   const CW=_frameCW, CH=_frameCH;
   if(s.x<-r-5||s.x>CW+r+5||s.y<-r-5||s.y>CH+r+5) return;
+  const rq=Math.round(r*2)/2;
+
+  fctx.save();
+  fctx.translate(s.x,s.y);
 
   if(p.atmo){
-    const atmoR=p.solid?r*(1+(p.atmoFrac||0)):r*1.08;
+    const atmoR=p.solid?Math.max(r,trueR*(1+(p.atmoFrac||0))):Math.max(r,trueR*1.08);
     if(atmoR<Math.max(CW,CH)*ATMO_GLOW_MAX_PX_MULT){
-      const glow=fctx.createRadialGradient(s.x,s.y,r*0.85,s.x,s.y,atmoR);
-      glow.addColorStop(0,'rgba(180,210,255,0.20)');
-      glow.addColorStop(1,'rgba(180,210,255,0)');
-      fctx.beginPath(); fctx.arc(s.x,s.y,atmoR,0,Math.PI*2); fctx.fillStyle=glow; fctx.fill();
+      const glow=getPlanetAtmoGlow(rq,Math.round(atmoR*2)/2);
+      fctx.beginPath(); fctx.arc(0,0,atmoR,0,Math.PI*2); fctx.fillStyle=glow; fctx.fill();
     }
   }
   fctx.save();
-  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.closePath(); fctx.clip();
-  const base=fctx.createRadialGradient(s.x-r*0.32,s.y-r*0.32,r*0.08,s.x,s.y,r*1.05);
-  base.addColorStop(0,shadeColor(p.color,0.35));
-  base.addColorStop(0.55,p.color);
-  base.addColorStop(1,shadeColor(p.color,-0.35));
-  fctx.fillStyle=base; fctx.fillRect(s.x-r,s.y-r,r*2,r*2);
+  fctx.beginPath(); fctx.arc(0,0,r,0,Math.PI*2); fctx.closePath(); fctx.clip();
+  const base=getPlanetBodyGradient(p.color,rq);
+  fctx.fillStyle=base; fctx.fillRect(-r,-r,r*2,r*2);
   if(!p.solid){
     fctx.strokeStyle='rgba(0,0,0,0.08)';
     for(let i=-4;i<=4;i++){
       fctx.lineWidth=r*0.09;
-      fctx.beginPath(); fctx.moveTo(s.x-r,s.y+i*r*0.2); fctx.lineTo(s.x+r,s.y+i*r*0.2+(i%2===0?r*0.03:-r*0.03)); fctx.stroke();
+      fctx.beginPath(); fctx.moveTo(-r,i*r*0.2); fctx.lineTo(r,i*r*0.2+(i%2===0?r*0.03:-r*0.03)); fctx.stroke();
     }
   } else if(p.groundColor){
     const R0=45,R1=1400;
@@ -4682,21 +4821,23 @@ function drawPlanet(p,t,viewerPos){
     if(closeness>0.01){
       const dx=viewerPos.x-pos.x, dy=viewerPos.y-pos.y;
       const dlen=Math.hypot(dx,dy)||1;
-      const nx=dx/dlen, ny=dy/dlen;
-      const subX=s.x+nx*r, subY=s.y-ny*r;
+      const nx=dx/dlen, ny=-dy/dlen;
+      const ca=_wtsCos, sa=_wtsSin;
+      const subX=(nx*ca-ny*sa)*r, subY=(nx*sa+ny*ca)*r;
       const gg=fctx.createRadialGradient(subX,subY,0,subX,subY,r*(0.9+1.1*closeness));
       gg.addColorStop(0,hexToRgba(p.groundColor,0.95*closeness));
       gg.addColorStop(0.5,hexToRgba(p.groundColor,0.55*closeness));
       gg.addColorStop(0.8,hexToRgba(p.groundColor,0.18*closeness));
       gg.addColorStop(1,hexToRgba(p.groundColor,0));
       fctx.fillStyle=gg;
-      fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2); fctx.fill();
+      fctx.beginPath(); fctx.arc(0,0,r,0,Math.PI*2); fctx.fill();
     }
   }
   fctx.restore();
-  fctx.beginPath(); fctx.arc(s.x,s.y,r,0,Math.PI*2);
+  fctx.beginPath(); fctx.arc(0,0,r,0,Math.PI*2);
   fctx.lineWidth=1; fctx.strokeStyle='rgba(255,255,255,0.14)'; fctx.stroke();
-  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText(p.name,s.x+r+4,s.y+4); }
+  if(r>10){ fctx.fillStyle='rgba(255,255,255,0.75)'; fctx.font='11px sans-serif'; fctx.fillText(p.name,r+4,4); }
+  fctx.restore();
 }
 
 // Draw a concrete trapezoid launch pad on Earth's surface (outward-from-Sun side)
@@ -5361,6 +5502,42 @@ function tauCetiTrack(t){
   const v=min(255,(b<96?e(0,6,32,16):e(88,16,104,8))*L(W[+(b>7&&b<32)],X[+(b>16)])/3+(b<96&&e(38,10,88,16)*L(W[b>64?3:2],X[b>71?1:b>56?3:2])/3)+(b>32&&e(28,12,48,32)*L(W[4],X[4])/5)+e(0,8,104,8)*(B(0)+B(1))/10+((b<32||b>48)&&(b<71||b>80)&&(b>16&&b<103&&.4*R(G(V[T&31])>>9))+(b>8&&b<96&&D(1E6)*M(0xEAEAAAEA,1))/5)+(b>7&&b<104&&(b<71||b>72)&&32*(sin(180*(T%1)**.4)+1)*M(0x44490449,0)+.6*D(300)*M(0xC4444444,1)));
   return byteToSample(v);
 }
+let sgrA_d=Array(3*4096).fill(0), sgrA_y=0, sgrA_v=0;
+function sgrATrack(tIn){
+  const sin=Math.sin, PI=Math.PI, min=Math.min, max=Math.max;
+  const u=4096, w=3*u;
+  let t=tIn;
+  if(!t){ sgrA_d=Array(w).fill(0); sgrA_y=0; sgrA_v=0; }
+  t%=2**23;
+  const d=sgrA_d;
+  let y=sgrA_y, v=sgrA_v;
+  const Y=t/u;
+  const s=sin;
+  const c=(x,y,z)=>t*2**(y[Y>>4&7]/12+z)%16>8+4*s(t*PI/x);
+  const e=(y,z=0)=>!(z&&z-1)*c(16*u,'22572253',y-6)+!z*(c(14*u,'00260021',y-5.5)+c(3*w,'33693364',y-5.5));
+  const h=!!(~Y>>3&15);
+  const b=Y>>4&2;
+  const xVar=b/b&&43-max(t/2/u%32,31);
+  const l=12;
+  const m=10+b;
+  const n=m+b;
+  const o='030-3-5-8-l-8-5-0-353-0-5-m-nxxx'[Y&31];
+  const noteVals={l,m,n,x:xVar};
+  let A,I,k,f,g,i,q,G,H,r,J,p;
+  const z=2**((+o+2||noteVals[o])/12);
+  y+=z*(~t>>11&1||Y%64>61)||-y;
+  v+=z||-v;
+  const B=y&32^y/2.01&32;
+  const F=y/2.02&16;
+  const a=[0,A=y/2%32,2*A+h*(B-A),A+B-F,A^B-F,(h?y:v)/2&48,I=v/2&32,I+F,I+h*(F-B),k=I+B-F,k-y%32,I+h*(A+F),B,B,B+I,I][f=Y>>7]+d[t%w];
+  d[t%w]=a/2;
+  const j=5*e(3.01);
+  const C=160*sin(3e3*(t%u)**.01)*(307599633+20446*u*b>>(Y&31)&1);
+  const D=sin(t**3)*20*(!(Y&3&&~Y>>1&31)/2+1-Y%1);
+  const result=min(max(a-[g=(i=l*sin(t*PI/u/32)**2+6)*e(1),g,q=h&&g+D,G=4/3*g+C+D-8*e(2),G,q+h*C,H=i*e(2)+j,H,r=h&&D+H,G,G+j,h&&g+j+C,C+(J=4*i)*e(0,1),p=C+D+J,p+H/2,r][f]+128,0),255);
+  sgrA_y=y; sgrA_v=v;
+  return byteToSample(result);
+}
 function buildTrack(tIn){
   const sin=Math.sin,PI=Math.PI;
   let t=tIn/1.48;
@@ -5387,14 +5564,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
   }
   constructor(){
     super();
-    this.gains={atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
-    this.targetGains={atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
-    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfMoonEurofunk=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfBuild=0; this.tfSignal=0; 
+    this.gains={atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,sgrA:0,build:0,signal:0}; 
+    this.targetGains={atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,sgrA:0,build:0,signal:0}; 
+    this.tfAtmo=0; this.tfInter=0; this.tfSoi=0; this.tfMoonEurofunk=0; this.tfInterstellar=0; this.tfNightVision=0; this.tfTauCeti=0; this.tfSgrA=0; this.tfBuild=0; this.tfSignal=0; 
     this.fadeStep=1/(FADE_SECONDS*sampleRate);
     this.port.onmessage=(e)=>{
       const d=e.data;
       if(d&&d.type==='state'){
-        this.targetGains={atmo:0,interplanetary:0,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0}; 
+        this.targetGains={atmo:0,interplanetary:0,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,sgrA:0,build:0,signal:0}; 
         this.targetGains[d.value]=1;
       }
     };
@@ -5404,14 +5581,14 @@ class BytebeatProcessor extends AudioWorkletProcessor {
     const L=out[0], R=out.length>1?out[1]:out[0];
     const volArr=parameters.volume;
     const vol=volArr.length>1?null:volArr[0];
-    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rMoonEurofunk=53140/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rBuild=56000/sampleRate, rSignal=44100/sampleRate;
+    const rAtmo=32000/sampleRate, rInter=48000/sampleRate, rSoi=48000/sampleRate, rMoonEurofunk=53140/sampleRate, rInterstellar=48000/sampleRate, rNightVision=44100/sampleRate, rTauCeti=36000/sampleRate, rSgrA=42782.78/sampleRate, rBuild=56000/sampleRate, rSignal=44100/sampleRate;
     for(let i=0;i<L.length;i++){
       const v=vol!==null?vol:volArr[i];
       for(const k in this.gains){
         if(this.gains[k]<this.targetGains[k]) this.gains[k]=Math.min(this.targetGains[k],this.gains[k]+this.fadeStep);
         else if(this.gains[k]>this.targetGains[k]) this.gains[k]=Math.max(this.targetGains[k],this.gains[k]-this.fadeStep);
       }
-      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfMoonEurofunk+=rMoonEurofunk; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; this.tfBuild+=rBuild; this.tfSignal+=rSignal; 
+      this.tfAtmo+=rAtmo; this.tfInter+=rInter; this.tfSoi+=rSoi; this.tfMoonEurofunk+=rMoonEurofunk; this.tfInterstellar+=rInterstellar; this.tfNightVision+=rNightVision; this.tfTauCeti+=rTauCeti; this.tfSgrA+=rSgrA; this.tfBuild+=rBuild; this.tfSignal+=rSignal; 
       let l=0,r=0;
       if(this.gains.atmo>0.0005){
         const s=atmoTrack(Math.floor(this.tfAtmo));
@@ -5441,6 +5618,10 @@ class BytebeatProcessor extends AudioWorkletProcessor {
         const s=tauCetiTrack(Math.floor(this.tfTauCeti))*this.gains.tauCeti;
         l+=s; r+=s;
       }
+      if(this.gains.sgrA>0.0005){
+        const s=sgrATrack(Math.floor(this.tfSgrA))*this.gains.sgrA;
+        l+=s; r+=s;
+      }
       if(this.gains.build>0.0005){
         const s=buildTrack(Math.floor(this.tfBuild));
         l+=s[0]*this.gains.build; r+=s[1]*this.gains.build;
@@ -5461,7 +5642,7 @@ let musicCtx=null, musicNode=null, musicVolume=0.35, musicLastState=null, musicS
 // fix chromebook fallback
 let musicScriptNode=null, musicFallbackState=null, musicFallbackFns=null;
 // Main Menu has no flight state to key music off of, so it cycles through every track instead.
-const MENU_MUSIC_ORDER=['atmo','soi','moonEurofunk','interplanetary','interstellar','nightVision','tauCeti'];
+const MENU_MUSIC_ORDER=['atmo','soi','moonEurofunk','interplanetary','interstellar','nightVision','tauCeti','sgrA'];
 const MENU_MUSIC_CYCLE_MS=120000; // 2 minutes per track
 let menuMusicCycleAnchor=null;
 function resetMenuMusicCycle(){ menuMusicCycleAnchor=null; }
@@ -5485,7 +5666,7 @@ function currentMusicState(){
   }
   return 'interplanetary';
 }
-const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',moonEurofunk:'Mooneurofunk',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',build:'Assembly Line',signal:'Signal of Distress'};
+const SONG_NAMES={atmo:'Neurofunk Remastered',soi:'New Beginnings',moonEurofunk:'Mooneurofunk',interplanetary:'Nullify',interstellar:'Through The Star System',nightVision:'Night Vision',tauCeti:'Wander Through The Sky',sgrA:'Sight Of The Radiant Shine',build:'Assembly Line',signal:'Signal of Distress'};
 function updateMusicState(){
   if(!musicNode&&!musicFallbackState) return;
   const st=currentMusicState();
@@ -5496,7 +5677,7 @@ function updateMusicState(){
       musicNode.port.postMessage({type:'state',value:st});
     }else if(musicFallbackState){
       const tg=musicFallbackState.targetGains;
-      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.moonEurofunk=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.build=0; tg.signal=0;
+      tg.atmo=0; tg.interplanetary=0; tg.soi=0; tg.moonEurofunk=0; tg.interstellar=0; tg.nightVision=0; tg.tauCeti=0; tg.sgrA=0; tg.build=0; tg.signal=0;
       tg[st]=1;
     }
   }
@@ -5530,19 +5711,19 @@ function startMusicEngineFallback(){
     musicCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(!musicFallbackFns){
       musicFallbackFns=new Function(BYTEBEAT_TRACKS_SRC+
-        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,moonEurofunkTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack};')();
+        '\nreturn {atmoTrack,interplanetaryTrack,soiTrack,moonEurofunkTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,sgrATrack,buildTrack,signalTrack};')();
     }
-    const {atmoTrack,interplanetaryTrack,soiTrack,moonEurofunkTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,buildTrack,signalTrack}=musicFallbackFns;
+    const {atmoTrack,interplanetaryTrack,soiTrack,moonEurofunkTrack,nightVisionTrack,interstellarTrack,tauCetiTrack,sgrATrack,buildTrack,signalTrack}=musicFallbackFns;
     const sr=musicCtx.sampleRate;
     const st={
-      gains:{atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
-      targetGains:{atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,build:0,signal:0},
-      tfAtmo:0,tfInter:0,tfSoi:0,tfMoonEurofunk:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfBuild:0,tfSignal:0,
+      gains:{atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,sgrA:0,build:0,signal:0},
+      targetGains:{atmo:0,interplanetary:1,soi:0,moonEurofunk:0,interstellar:0,nightVision:0,tauCeti:0,sgrA:0,build:0,signal:0},
+      tfAtmo:0,tfInter:0,tfSoi:0,tfMoonEurofunk:0,tfInterstellar:0,tfNightVision:0,tfTauCeti:0,tfSgrA:0,tfBuild:0,tfSignal:0,
       fadeStep:1/(FADE_SECONDS*sr),
       vol:musicVolume,
     };
     musicFallbackState=st;
-    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rMoonEurofunk=53140/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rBuild=56000/sr, rSignal=44100/sr;
+    const rAtmo=32000/sr, rInter=48000/sr, rSoi=48000/sr, rMoonEurofunk=53140/sr, rInterstellar=48000/sr, rNightVision=44100/sr, rTauCeti=36000/sr, rSgrA=8000/sr, rBuild=56000/sr, rSignal=44100/sr;
     // ScriptProcessorNode runs on the main thread (unlike AudioWorkletNode, our primary path above,
     // which has its own realtime thread), so it competes with physics/render for CPU time. A bigger
     // buffer only delays underruns, it can't prevent them - when the main thread does stall long enough,
@@ -5566,7 +5747,7 @@ function startMusicEngineFallback(){
           if(st.gains[k]<st.targetGains[k]) st.gains[k]=Math.min(st.targetGains[k],st.gains[k]+st.fadeStep);
           else if(st.gains[k]>st.targetGains[k]) st.gains[k]=Math.max(st.targetGains[k],st.gains[k]-st.fadeStep);
         }
-        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfMoonEurofunk+=rMoonEurofunk; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti; st.tfBuild+=rBuild; st.tfSignal+=rSignal;
+        st.tfAtmo+=rAtmo; st.tfInter+=rInter; st.tfSoi+=rSoi; st.tfMoonEurofunk+=rMoonEurofunk; st.tfInterstellar+=rInterstellar; st.tfNightVision+=rNightVision; st.tfTauCeti+=rTauCeti; st.tfSgrA+=rSgrA; st.tfBuild+=rBuild; st.tfSignal+=rSignal;
         let l=0,r=0;
         if(st.gains.atmo>0.0005){
           const s=atmoTrack(Math.floor(st.tfAtmo));
@@ -5594,6 +5775,10 @@ function startMusicEngineFallback(){
         }
         if(st.gains.tauCeti>0.0005){
           const s=tauCetiTrack(Math.floor(st.tfTauCeti))*st.gains.tauCeti;
+          l+=s; r+=s;
+        }
+        if(st.gains.sgrA>0.0005){
+          const s=sgrATrack(Math.floor(st.tfSgrA))*st.gains.sgrA;
           l+=s; r+=s;
         }
         if(st.gains.build>0.0005){
