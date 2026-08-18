@@ -1,6 +1,7 @@
 # Spaceflight Sim (SFSiHTML)
 
 This is a SINGULAR file. The whole game sits in the single file 'SpaceflightSimulatorIn.HTML'. Real simple.
+Spaceflight is compressed is the compressed version of this. Wow.
 
 Current version as of readme update: **vR1.6.0**
 
